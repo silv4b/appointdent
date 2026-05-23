@@ -1,0 +1,300 @@
+"use client"
+
+import { useSupabase } from "@/components/providers/supabase-provider"
+import { createClient } from "@/lib/supabase/client"
+import { CalendarDays, DollarSign, Eye, Stethoscope, Syringe, TrendingDown, TrendingUp, Users } from "lucide-react"
+import { useCallback, useEffect, useState } from "react"
+import Link from "next/link"
+import { format } from "date-fns"
+import { ptBR } from "date-fns/locale"
+
+type Stat = {
+  label: string
+  value: string
+  change: string
+  trend: "up" | "down"
+  icon: typeof DollarSign
+  chartColor: string
+}
+
+const quickLinks = [
+  { href: "/agenda", label: "Agenda", icon: CalendarDays, color: "bg-chart-1/10 text-chart-1" },
+  { href: "/pacientes", label: "Pacientes", icon: Users, color: "bg-chart-2/10 text-chart-2" },
+  { href: "/dentistas", label: "Dentistas", icon: Stethoscope, color: "bg-chart-3/10 text-chart-3" },
+  { href: "/procedimentos", label: "Procedimentos", icon: Syringe, color: "bg-chart-4/10 text-chart-4" },
+]
+
+type RecentAppointment = {
+  id: string
+  patients: { name: string } | null
+  dentists: { name: string } | null
+  procedures: { name: string; color: string | null } | null
+  start_time: string
+  end_time: string
+  status: string
+}
+
+export function DashboardClient() {
+  const { user } = useSupabase()
+  const [stats, setStats] = useState<Stat[]>([
+    { label: "Agendamentos Hoje", value: "-", change: "", trend: "up", icon: CalendarDays, chartColor: "chart-1" },
+    { label: "Pacientes Ativos", value: "-", change: "", trend: "up", icon: Users, chartColor: "chart-2" },
+    { label: "Dentistas", value: "-", change: "", trend: "up", icon: Stethoscope, chartColor: "chart-3" },
+    { label: "Procedimentos", value: "-", change: "", trend: "up", icon: Eye, chartColor: "chart-4" },
+  ])
+  const [appointments, setAppointments] = useState<RecentAppointment[]>([])
+  const [greeting, setGreeting] = useState("Bom dia")
+
+  useEffect(() => {
+    const hour = new Date().getHours()
+    if (hour < 12) setGreeting("Bom dia")
+    else if (hour < 18) setGreeting("Boa tarde")
+    else setGreeting("Boa noite")
+  }, [])
+
+  const fetchStats = useCallback(async () => {
+    const supabase = createClient()
+    const today = format(new Date(), "yyyy-MM-dd")
+
+    const [apptsCount, patientsCount, dentistsCount, proceduresCount, appts] = await Promise.all([
+      supabase
+        .from("appointments")
+        .select("*", { count: "exact", head: true })
+        .gte("start_time", `${today}T00:00:00Z`)
+        .lte("start_time", `${today}T23:59:59Z`),
+      supabase.from("patients").select("*", { count: "exact", head: true }).eq("active", true),
+      supabase.from("dentists").select("*", { count: "exact", head: true }).eq("active", true),
+      supabase.from("procedures").select("*", { count: "exact", head: true }).eq("active", true),
+      supabase
+        .from("appointments")
+        .select("*, patients(name), dentists(name), procedures(name, color)")
+        .gte("start_time", `${today}T00:00:00Z`)
+        .lte("start_time", `${today}T23:59:59Z`)
+        .order("start_time")
+        .limit(5),
+    ])
+
+    setStats([
+      { label: "Agendamentos Hoje", value: String(apptsCount.count ?? 0), change: "", trend: "up", icon: CalendarDays, chartColor: "chart-1" },
+      { label: "Pacientes Ativos", value: String(patientsCount.count ?? 0), change: "", trend: "up", icon: Users, chartColor: "chart-2" },
+      { label: "Dentistas", value: String(dentistsCount.count ?? 0), change: "", trend: "up", icon: Stethoscope, chartColor: "chart-3" },
+      { label: "Procedimentos", value: String(proceduresCount.count ?? 0), change: "", trend: "up", icon: Syringe, chartColor: "chart-4" },
+    ])
+    setAppointments(appts.data as RecentAppointment[] ?? [])
+  }, [])
+
+  useEffect(() => {
+    fetchStats()
+  }, [fetchStats])
+
+  const userName = user?.user_metadata?.name as string | undefined
+
+  const statusLabel: Record<string, string> = {
+    scheduled: "Agendado",
+    confirmed: "Confirmado",
+    in_progress: "Em Andamento",
+    completed: "Concluído",
+    cancelled: "Cancelado",
+  }
+
+  const statusVariant: Record<string, string> = {
+    scheduled: "bg-primary/10 text-primary",
+    confirmed: "bg-chart-2/10 text-chart-2",
+    in_progress: "bg-warning/10 text-warning-foreground",
+    completed: "bg-success/10 text-success-foreground",
+    cancelled: "bg-destructive/10 text-destructive",
+  }
+
+  return (
+    <>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {greeting}{userName ? `, ${userName.split(" ")[0]}` : ""}!
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Aqui está o resumo da clínica hoje.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        {stats.map((stat) => {
+          const Icon = stat.icon
+          const bgMap: Record<string, string> = {
+            "chart-1": "bg-chart-1/10",
+            "chart-2": "bg-chart-2/10",
+            "chart-3": "bg-chart-3/10",
+            "chart-4": "bg-chart-4/10",
+          }
+          const textMap: Record<string, string> = {
+            "chart-1": "text-chart-1",
+            "chart-2": "text-chart-2",
+            "chart-3": "text-chart-3",
+            "chart-4": "text-chart-4",
+          }
+          return (
+            <div
+              key={stat.label}
+              className="group rounded-2xl border bg-card text-card-foreground shadow-md transition-all duration-300 hover:shadow-lg hover:border-primary/20"
+            >
+              <div className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {stat.label}
+                    </p>
+                    <span className="text-3xl font-bold tracking-tight">
+                      {stat.value}
+                    </span>
+                  </div>
+                  <div className={`flex h-12 w-12 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-110 shadow-sm ${bgMap[stat.chartColor]}`}>
+                    <Icon className={`h-6 w-6 ${textMap[stat.chartColor]}`} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        {quickLinks.map((link) => {
+          const Icon = link.icon
+          return (
+            <Link key={link.href} href={link.href}>
+              <div className="group cursor-pointer rounded-2xl border bg-card text-card-foreground shadow-md transition-all duration-300 hover:shadow-lg hover:border-primary/20">
+                <div className="flex items-center gap-4 p-6">
+                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-110 shadow-sm ${link.color}`}>
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <span className="text-base font-medium">{link.label}</span>
+                </div>
+              </div>
+            </Link>
+          )
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+        <div className="rounded-2xl border bg-card text-card-foreground shadow-md col-span-full xl:col-span-8">
+          <div className="flex items-center justify-between p-6 pb-3">
+            <h3 className="text-base font-semibold tracking-tight">
+              Agendamentos de Hoje
+            </h3>
+            <Link
+              href="/agenda"
+              className="text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              Ver todos
+            </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="pb-3 pl-6 text-start text-xs font-medium text-muted-foreground">
+                    Paciente
+                  </th>
+                  <th className="pb-3 text-start text-xs font-medium text-muted-foreground">
+                    Dentista
+                  </th>
+                  <th className="pb-3 text-start text-xs font-medium text-muted-foreground">
+                    Procedimento
+                  </th>
+                  <th className="pb-3 text-start text-xs font-medium text-muted-foreground">
+                    Horário
+                  </th>
+                  <th className="pb-3 pr-6 text-end text-xs font-medium text-muted-foreground">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {appointments.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="py-12 text-center text-sm text-muted-foreground"
+                    >
+                      Nenhum agendamento para hoje.
+                    </td>
+                  </tr>
+                ) : (
+                  appointments.map((a) => (
+                    <tr
+                      key={a.id}
+                      className="group border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors"
+                    >
+                      <td className="py-4 pl-6">
+                        <p className="text-sm font-medium">
+                          {a.patients?.name ?? "-"}
+                        </p>
+                      </td>
+                      <td className="py-4">
+                        <p className="text-sm text-muted-foreground">
+                          {a.dentists?.name ?? "-"}
+                        </p>
+                      </td>
+                      <td className="py-4">
+                        <div className="flex items-center gap-2">
+                          {a.procedures?.color && (
+                            <div
+                              className="h-2 w-2 rounded-full"
+                              style={{ backgroundColor: a.procedures.color }}
+                            />
+                          )}
+                          <span className="text-sm text-muted-foreground">
+                            {a.procedures?.name ?? "-"}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-4">
+                        <span className="text-sm text-muted-foreground">
+                          {format(new Date(a.start_time), "HH:mm")} -{" "}
+                          {format(new Date(a.end_time), "HH:mm")}
+                        </span>
+                      </td>
+                      <td className="py-4 pr-6 text-end">
+                        <span
+                          className={`inline-flex items-center rounded-md border border-transparent px-2 py-0.5 text-[11px] font-medium capitalize shadow-sm ${statusVariant[a.status] ?? "bg-muted text-muted-foreground"}`}
+                        >
+                          {statusLabel[a.status] ?? a.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border bg-card text-card-foreground shadow-md col-span-full xl:col-span-4">
+          <div className="p-6 pb-3">
+            <h3 className="text-base font-semibold tracking-tight">
+              Acesso Rápido
+            </h3>
+          </div>
+          <div className="space-y-1 px-4 pb-5">
+            {[
+              { href: "/agenda", label: "Ver Agenda do Dia", desc: "Agendamentos de hoje" },
+              { href: "/pacientes", label: "Cadastrar Paciente", desc: "Novo paciente" },
+              { href: "/dentistas", label: "Gerenciar Dentistas", desc: "Profissionais" },
+              { href: "/horarios", label: "Grade de Horários", desc: "Disponibilidade" },
+            ].map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="flex items-center justify-between rounded-lg px-3 py-3 transition-colors hover:bg-muted/50"
+              >
+                <div>
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.desc}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
