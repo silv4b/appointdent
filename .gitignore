@@ -43,6 +43,9 @@ yarn-error.log*
 # database backups
 .db_backups/
 
+# Features
+.features/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
