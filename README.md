@@ -27,7 +27,7 @@ Sistema de agendamento odontológico multi-tenant construído com Next.js e Supa
 npx supabase start
 ```
 
-Isso sobe: PostgreSQL, Auth, Storage, Realtime, Studio (<http://127.0.0.1:54323>).
+Isso sobe: PostgreSQL, Auth, Storage, Realtime, Studio (<http://127.0.0.1:54333>).
 
 ### 2. Configurar variáveis de ambiente
 
@@ -35,7 +35,7 @@ Copie do output do `supabase start` para o `.env.local`:
 
 | Variável | Valor |
 |----------|-------|
-| `NEXT_PUBLIC_SUPABASE_URL` | `http://127.0.0.1:54321` |
+| `NEXT_PUBLIC_SUPABASE_URL` | `http://127.0.0.1:54331` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `sb_publishable_...` |
 
 ### 3. Rodar as migrations
