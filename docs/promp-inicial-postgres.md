@@ -1,4 +1,4 @@
-# Odonto Schedule
+# AppointDent
 
 ## Funcionalidades Base para o MVP
 

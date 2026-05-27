@@ -1,4 +1,4 @@
-# Odonto Schedule
+# AppointDent
 
 Sistema de agendamento odontológico com gestão de pacientes, dentistas, procedimentos e agenda visual com calendário interativo. Desenvolvido para clínicas e consultórios que precisam de uma ferramenta moderna e eficiente.
 

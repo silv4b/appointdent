@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "Odonto Schedule",
-  description: "Sistema de agendamento odontológico",
+  title: "AppointDent",
+  description: "Agendamento odontológico inteligente",
 }
 
 export default function RootLayout({

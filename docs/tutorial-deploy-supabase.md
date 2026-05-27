@@ -41,7 +41,7 @@ npm install supabase@latest --save-dev
 1. Acesse [https://supabase.com/dashboard/projects](https://supabase.com/dashboard/projects)
 2. Clique em **"New Project"**
 3. Preencha:
-   - **Name**: `odonto-schedule-prod` (ou nome desejado)
+   - **Name**: `appointdent-prod` (ou nome desejado)
    - **Database Password**: crie uma senha forte e **guarde-a** (necessário para `db push`)
    - **Region**: escolha a mais próxima dos seus usuários (ex: `South America (São Paulo)` — `sa-saopaulo`)
    - **Pricing Plan**: Free para começar

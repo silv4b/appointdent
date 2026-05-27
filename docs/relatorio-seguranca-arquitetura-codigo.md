@@ -1,4 +1,4 @@
-# Relatório de Auditoria — Odonto Schedule
+# Relatório de Auditoria — AppointDent
 
 > **Gerado em:** 26/05/2026
 > **Escopo:** Análise de segurança, arquitetura e qualidade de código
