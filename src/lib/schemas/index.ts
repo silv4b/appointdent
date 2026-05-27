@@ -38,6 +38,7 @@ export const appointmentSchema = z.object({
   end_time: z.string().nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
   status: z.string().max(20).optional(),
+  return_to_id: z.string().uuid().nullable().optional(),
 })
 
 export const appointmentUpdateSchema = appointmentSchema.extend({
