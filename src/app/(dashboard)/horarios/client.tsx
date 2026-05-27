@@ -231,10 +231,12 @@ export function HorariosClient() {
             const isExpanded = expanded[dentist.id] ?? true
             return (
               <div key={dentist.id} className="rounded-2xl border bg-card shadow-md">
-                <button
-                  type="button"
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => toggleExpanded(dentist.id)}
-                  className="flex w-full items-center justify-between border-b px-6 py-4 text-left transition-colors hover:bg-muted/20"
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleExpanded(dentist.id) } }}
+                  className="flex w-full cursor-pointer items-center justify-between border-b px-6 py-4 text-left transition-colors hover:bg-muted/20"
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
@@ -261,7 +263,7 @@ export function HorariosClient() {
                       className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${isExpanded ? "rotate-0" : "-rotate-90"}`}
                     />
                   </div>
-                </button>
+                </div>
 
                 {isExpanded && (
                   <div className="divide-y">
