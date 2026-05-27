@@ -943,11 +943,19 @@ export function AgendaClient() {
 
   const defaultColor = "#3b82f6"
 
+  function hexToRgba(hex: string, alpha: number) {
+    const c = hex.replace("#", "")
+    const r = parseInt(c.substring(0, 2), 16)
+    const g = parseInt(c.substring(2, 4), 16)
+    const b = parseInt(c.substring(4, 6), 16)
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
+  }
+
   const eventPropGetter: EventPropGetter<CalendarEvent> = useCallback((event) => {
     const color = event.appointment.procedures?.color ?? defaultColor
     return {
       style: {
-        "--event-bg": color,
+        backgroundColor: hexToRgba(color, 0.25),
         border: `1px solid ${color}`,
         borderLeft: `3px solid ${color}`,
       } as React.CSSProperties,

@@ -93,20 +93,37 @@ export async function saveAnamneseSession(formData: FormData) {
   const parsed = anamneseSessionSchema.safeParse(raw)
   if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
 
-  const { data: dentist } = await supabase
-    .from("dentists")
-    .select("id")
-    .eq("profile_id", user.id)
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
     .single()
 
-  if (!dentist) return err("Perfil de dentista não encontrado")
+  if (!profile) return err("Perfil de usuário não encontrado")
+
+  let dentistId: string
+
+  if (profile.role === "dentist") {
+    const { data: dentist } = await supabase
+      .from("dentists")
+      .select("id")
+      .eq("profile_id", user.id)
+      .single()
+
+    if (!dentist) return err("Perfil de dentista não encontrado")
+    dentistId = dentist.id
+  } else {
+    if (!parsed.data.dentist_id) return err("Selecione um dentista")
+    dentistId = parsed.data.dentist_id
+  }
 
   const { error } = await supabase.from("anamnese_sessions").insert({
     title: parsed.data.title,
     appointment_id: parsed.data.appointment_id || null,
-    dentist_id: dentist.id,
+    dentist_id: dentistId,
     patient_id: parsed.data.patient_id,
     notes: parsed.data.notes || null,
+    fields: parsed.data.fields,
   })
 
   if (error) return err(error.message)

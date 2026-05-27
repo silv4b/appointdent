@@ -1,16 +1,15 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Table,
@@ -24,7 +23,7 @@ import { saveAnamneseSession } from "@/lib/actions/anamnese"
 import { createClient } from "@/lib/supabase/client"
 import { Database } from "@/types/database"
 import { format } from "date-fns"
-import { BookOpen, FileText, Loader2, Plus, Stethoscope } from "lucide-react"
+import { BookOpen, FileText, GripVertical, Loader2, Plus, Stethoscope, Trash2 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
@@ -38,21 +37,31 @@ type AnamneseSession = Database["public"]["Tables"]["anamnese_sessions"]["Row"] 
   appointments: { patients: { name: string } | null; dentists: { name: string } | null } | null
 }
 
+interface AnamneseField {
+  label: string
+  content: string
+}
+
 export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
   const [patient, setPatient] = useState<{ id: string; name: string; phone: string | null; birth_date: string | null; notes: string | null } | null>(null)
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [sessions, setSessions] = useState<AnamneseSession[]>([])
   const [loading, setLoading] = useState(true)
-  const [sessionOpen, setSessionOpen] = useState(false)
-  const [sessionTitle, setSessionTitle] = useState("")
-  const [sessionNotes, setSessionNotes] = useState("")
   const [saving, setSaving] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [dentists, setDentists] = useState<Database["public"]["Tables"]["dentists"]["Row"][]>([])
+  const [selectedDentistId, setSelectedDentistId] = useState("")
+
+  const [formTitle, setFormTitle] = useState("")
+  const [formFields, setFormFields] = useState<AnamneseField[]>([{ label: "", content: "" }])
 
   const fetch = useCallback(async () => {
     setLoading(true)
     const supabase = createClient()
 
-    const [patientRes, apptsRes, sessionsRes] = await Promise.all([
+    const { data: { user } } = await supabase.auth.getUser()
+
+    const [patientRes, apptsRes, sessionsRes, profileRes, dentistsRes] = await Promise.all([
       supabase.from("patients").select("*").eq("id", pacienteId).single(),
       supabase
         .from("appointments")
@@ -64,34 +73,65 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
         .select("*, appointments(patients(name), dentists(name))")
         .eq("patient_id", pacienteId)
         .order("created_at", { ascending: false }),
+      supabase.from("profiles").select("role").eq("id", user?.id ?? "").single(),
+      supabase.from("dentists").select("*").order("name"),
     ])
 
     setPatient(patientRes.data ?? null)
     setAppointments(apptsRes.data ?? [])
     setSessions(sessionsRes.data as AnamneseSession[] ?? [])
+    setUserRole(profileRes.data?.role ?? null)
+    setDentists(dentistsRes.data ?? [])
     setLoading(false)
   }, [pacienteId])
 
   useEffect(() => { fetch() }, [fetch])
 
+  const addField = () => {
+    setFormFields([...formFields, { label: "", content: "" }])
+  }
+
+  const removeField = (index: number) => {
+    if (formFields.length <= 1) return
+    setFormFields(formFields.filter((_, i) => i !== index))
+  }
+
+  const updateField = (index: number, key: keyof AnamneseField, value: string) => {
+    const updated = [...formFields]
+    updated[index] = { ...updated[index], [key]: value }
+    setFormFields(updated)
+  }
+
+  const resetForm = () => {
+    setFormTitle("")
+    setFormFields([{ label: "", content: "" }])
+    setSelectedDentistId("")
+  }
+
   const handleSaveSession = async () => {
-    if (!sessionTitle.trim()) {
+    if (!formTitle.trim()) {
       toast.error("Informe um título para a sessão")
       return
     }
+    if (userRole !== "dentist" && !selectedDentistId) {
+      toast.error("Selecione um dentista")
+      return
+    }
+
+    const filledFields = formFields.filter((f) => f.label.trim())
+
     setSaving(true)
     const formData = new FormData()
-    formData.set("title", sessionTitle.trim())
+    formData.set("title", formTitle.trim())
     formData.set("patient_id", pacienteId)
-    formData.set("notes", sessionNotes)
+    formData.set("fields", JSON.stringify(filledFields))
+    if (selectedDentistId) formData.set("dentist_id", selectedDentistId)
     const result = await saveAnamneseSession(formData)
     if (result?.error) {
       toast.error(result.error)
     } else {
       toast.success("Sessão salva com sucesso")
-      setSessionOpen(false)
-      setSessionTitle("")
-      setSessionNotes("")
+      resetForm()
       fetch()
     }
     setSaving(false)
@@ -115,154 +155,195 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
   }
 
   return (
-    <div>
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{patient.name}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {patient.phone && <span className="mr-4">Tel: {patient.phone}</span>}
-            {patient.birth_date && <span>Nasc: {patient.birth_date}</span>}
-          </p>
-        </div>
-        <Button onClick={() => setSessionOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Nova Sessão
-        </Button>
-      </div>
-
-      {sessions.length > 0 && (
-        <div className="mb-8">
-          <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Sessões de Anamnese ({sessions.length})
-          </h2>
-          <div className="space-y-3">
-            {sessions.map((s) => (
-              <div key={s.id} className="rounded-xl border bg-card p-4">
-                <div className="mb-2 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <BookOpen className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">{s.title ?? "Sessão"}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {s.appointments?.dentists?.name && (
-                      <span className="text-xs text-muted-foreground">
-                        {s.appointments.dentists.name}
-                      </span>
-                    )}
-                    <span className="text-xs text-muted-foreground">
+    <div className="grid grid-cols-1 gap-8 xl:grid-cols-5">
+      {/* Sidebar — Sessões anteriores */}
+      <div className="order-2 space-y-6 xl:order-1 xl:col-span-2">
+        {sessions.length > 0 ? (
+          <>
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Sessões Anteriores ({sessions.length})
+            </h2>
+            <div className="space-y-4">
+              {sessions.map((s) => (
+                <div key={s.id} className="rounded-xl border bg-card p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm font-medium">{s.title ?? "Sessão"}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
                       {format(new Date(s.created_at), "dd/MM/yyyy HH:mm")}
                     </span>
                   </div>
+
+                  {Array.isArray(s.fields) && s.fields.length > 0 ? (
+                    <div className="mt-3 space-y-2">
+                      {(s.fields as unknown as AnamneseField[]).map((f, fi) => (
+                        <div key={fi} className="rounded-lg bg-muted/30 p-3">
+                          <p className="text-xs font-medium text-muted-foreground">{f.label}</p>
+                          <p className="mt-0.5 whitespace-pre-wrap text-sm">{f.content || "—"}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : s.notes ? (
+                    <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{s.notes}</p>
+                  ) : null}
                 </div>
-                {s.notes ? (
-                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">{s.notes}</p>
-                ) : (
-                  <p className="text-sm italic text-muted-foreground/60">Nenhuma anotação</p>
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12">
+            <FileText className="h-8 w-8 text-muted-foreground" />
+            <p className="mt-3 text-sm font-medium">Nenhuma sessão anterior</p>
+            <p className="text-xs text-muted-foreground">As sessões salvas aparecerão aqui.</p>
           </div>
-        </div>
-      )}
+        )}
 
-      {appointments.length > 0 && (
-        <div className="mb-8">
-          <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Histórico de Atendimentos ({appointments.length})
-          </h2>
-          <div className="rounded-xl border bg-card">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Dentista</TableHead>
-                  <TableHead>Procedimento</TableHead>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Horário</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {appointments.map((a) => (
-                  <TableRow key={a.id}>
-                    <TableCell className="font-medium">{a.dentists?.name ?? "-"}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {a.procedures?.color && (
-                          <div className="h-2 w-2 rounded-full" style={{ backgroundColor: a.procedures.color }} />
-                        )}
-                        <span className="text-sm text-muted-foreground">{a.procedures?.name ?? "-"}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{format(new Date(a.start_time), "dd/MM/yyyy")}</TableCell>
-                    <TableCell>
-                      {format(new Date(a.start_time), "HH:mm")} - {format(new Date(a.end_time), "HH:mm")}
-                    </TableCell>
-                    <TableCell>
-                      <span className="inline-flex items-center rounded-md border border-transparent px-2 py-0.5 text-[11px] font-medium capitalize shadow-sm bg-muted text-muted-foreground">
-                        {a.status}
-                      </span>
-                    </TableCell>
+        {appointments.length > 0 && (
+          <div>
+            <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Histórico de Atendimentos
+            </h2>
+            <div className="rounded-xl border bg-card">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Dentista</TableHead>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Status</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {appointments.map((a) => (
+                    <TableRow key={a.id}>
+                      <TableCell className="font-medium text-xs">{a.dentists?.name ?? "-"}</TableCell>
+                      <TableCell className="text-xs">{format(new Date(a.start_time), "dd/MM/yyyy")}</TableCell>
+                      <TableCell>
+                        <span className="inline-flex items-center rounded-md border border-transparent px-2 py-0.5 text-[10px] font-medium capitalize shadow-sm bg-muted text-muted-foreground">
+                          {a.status}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {sessions.length === 0 && appointments.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16">
-          <FileText className="h-12 w-12 text-muted-foreground" />
-          <p className="mt-4 text-lg font-medium">Nenhum registro encontrado</p>
-          <p className="text-sm text-muted-foreground">
-            Este paciente ainda não possui atendimentos ou sessões de anamnese.
-          </p>
-        </div>
-      )}
+      {/* Main — Formulário inline */}
+      <div className="order-1 xl:col-span-3">
+        <div className="rounded-2xl border bg-card shadow-sm">
+          <div className="border-b px-6 py-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">{patient.name}</h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {patient.phone && <span className="mr-4">Tel: {patient.phone}</span>}
+                  {patient.birth_date && <span>Nasc: {patient.birth_date}</span>}
+                </p>
+              </div>
+            </div>
+          </div>
 
-      <Dialog open={sessionOpen} onOpenChange={setSessionOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Nova Sessão de Anamnese</DialogTitle>
-            <DialogDescription>
-              Adicione uma sessão de anamnese para {patient.name}.
-            </DialogDescription>
-          </DialogHeader>
+          <div className="space-y-6 p-6">
+            {userRole !== "dentist" && (
+              <div className="max-w-xs">
+                <Label htmlFor="inline-dentist">Dentista responsável</Label>
+                <Select value={selectedDentistId} onValueChange={(v) => setSelectedDentistId(v ?? "")}>
+                  <SelectTrigger id="inline-dentist" className="mt-1">
+                    <SelectValue placeholder="Selecione um dentista..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {dentists.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
-          <div className="space-y-4">
             <div>
-              <Label htmlFor="title">Título da Sessão</Label>
+              <Label htmlFor="inline-title">Título da Sessão</Label>
               <Input
-                id="title"
+                id="inline-title"
                 placeholder="Ex: Sessão de saúde bucal"
-                value={sessionTitle}
-                onChange={(e) => setSessionTitle(e.target.value)}
+                value={formTitle}
+                onChange={(e) => setFormTitle(e.target.value)}
                 className="mt-1"
               />
             </div>
 
-            <div>
-              <Label htmlFor="notes">Anotações</Label>
-              <Textarea
-                id="notes"
-                className="mt-1"
-                placeholder="Descreva as observações da sessão..."
-                value={sessionNotes}
-                onChange={(e) => setSessionNotes(e.target.value)}
-                rows={5}
-              />
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-base">Campos da Anamnese</Label>
+                <Button type="button" variant="outline" size="sm" onClick={addField}>
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Adicionar Campo
+                </Button>
+              </div>
+
+              {formFields.map((field, i) => (
+                <div key={i} className="rounded-xl border bg-muted/20 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <GripVertical className="h-4 w-4 text-muted-foreground/40" />
+                      <span className="text-xs font-medium text-muted-foreground">Campo {i + 1}</span>
+                    </div>
+                    {formFields.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeField(i)}
+                        className="h-7 text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-xs">Nome do campo</Label>
+                      <Input
+                        placeholder="Ex: Saúde bucal, Histórico familiar..."
+                        value={field.label}
+                        onChange={(e) => updateField(i, "label", e.target.value)}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Conteúdo</Label>
+                      <Textarea
+                        placeholder="Descreva as observações deste campo..."
+                        value={field.content}
+                        onChange={(e) => updateField(i, "content", e.target.value)}
+                        className="mt-1 min-h-[80px]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <Button
+                size="lg"
+                onClick={handleSaveSession}
+                disabled={saving || !formTitle.trim() || (userRole !== "dentist" && !selectedDentistId)}
+              >
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Salvar Sessão
+              </Button>
+              <Button variant="ghost" size="lg" onClick={resetForm} disabled={saving}>
+                Limpar
+              </Button>
             </div>
           </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSessionOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSaveSession} disabled={saving || !sessionTitle.trim()}>
-              {saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-              Salvar Sessão
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </div>
     </div>
   )
 }

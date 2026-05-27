@@ -39,6 +39,7 @@ export type Database = {
           appointment_id: string | null
           created_at: string
           dentist_id: string
+          fields: Json
           id: string
           notes: string | null
           patient_id: string
@@ -49,6 +50,7 @@ export type Database = {
           appointment_id?: string | null
           created_at?: string
           dentist_id: string
+          fields?: Json
           id?: string
           notes?: string | null
           patient_id: string
@@ -59,6 +61,7 @@ export type Database = {
           appointment_id?: string | null
           created_at?: string
           dentist_id?: string
+          fields?: Json
           id?: string
           notes?: string | null
           patient_id?: string

@@ -30,7 +30,7 @@ export default function LoginPage() {
           <div className="rounded-full bg-white/20 p-4">
             <Syringe className="h-12 w-12" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">Odonto Schedule</h1>
+          <h1 className="text-3xl font-bold tracking-tight">AppointDent 🦷</h1>
           <p className="max-w-sm text-center text-blue-100">
             Gerencie sua clínica com agendamentos inteligentes.
           </p>
