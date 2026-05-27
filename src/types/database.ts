@@ -36,30 +36,33 @@ export type Database = {
     Tables: {
       anamnese_sessions: {
         Row: {
-          appointment_id: string
+          appointment_id: string | null
           created_at: string
           dentist_id: string
           id: string
           notes: string | null
           patient_id: string
+          title: string | null
           updated_at: string
         }
         Insert: {
-          appointment_id: string
+          appointment_id?: string | null
           created_at?: string
           dentist_id: string
           id?: string
           notes?: string | null
           patient_id: string
+          title?: string | null
           updated_at?: string
         }
         Update: {
-          appointment_id?: string
+          appointment_id?: string | null
           created_at?: string
           dentist_id?: string
           id?: string
           notes?: string | null
           patient_id?: string
+          title?: string | null
           updated_at?: string
         }
         Relationships: [

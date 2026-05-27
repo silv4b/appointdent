@@ -1,7 +1,13 @@
 "use client"
 
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -12,35 +18,55 @@ import {
 } from "@/components/ui/table"
 import { createClient } from "@/lib/supabase/client"
 import { Database } from "@/types/database"
+import { useEffect, useMemo, useState } from "react"
 import { Loader2, Search, UserRound, FileText } from "lucide-react"
 import Link from "next/link"
-import { useCallback, useRef, useState } from "react"
 
 type Patient = Database["public"]["Tables"]["patients"]["Row"]
+type Dentist = Database["public"]["Tables"]["dentists"]["Row"]
+type AppointmentLink = Pick<Database["public"]["Tables"]["appointments"]["Row"], "patient_id" | "dentist_id">
 
 export function AnamneseSearchClient() {
   const [query, setQuery] = useState("")
-  const [results, setResults] = useState<Patient[]>([])
-  const [loading, setLoading] = useState(false)
-  const [searched, setSearched] = useState(false)
-  const searchRef = useRef<HTMLInputElement>(null)
+  const [dentistId, setDentistId] = useState("all")
+  const [patients, setPatients] = useState<Patient[]>([])
+  const [dentists, setDentists] = useState<Dentist[]>([])
+  const [appointments, setAppointments] = useState<AppointmentLink[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const handleSearch = useCallback(async () => {
-    if (!query.trim()) return
-    setLoading(true)
-    setSearched(true)
-
+  useEffect(() => {
     const supabase = createClient()
-    const { data } = await supabase
-      .from("patients")
-      .select("*")
-      .ilike("name", `%${query.trim()}%`)
-      .order("name")
-      .limit(30)
+    Promise.all([
+      supabase.from("patients").select("*").order("name").limit(500),
+      supabase.from("dentists").select("*").order("name"),
+      supabase.from("appointments").select("patient_id, dentist_id"),
+    ]).then(([patientsRes, dentistsRes, apptsRes]) => {
+      setPatients(patientsRes.data ?? [])
+      setDentists(dentistsRes.data ?? [])
+      setAppointments(apptsRes.data ?? [])
+      setLoading(false)
+    })
+  }, [])
 
-    setResults(data ?? [])
-    setLoading(false)
-  }, [query])
+  const filtered = useMemo(() => {
+    let result = patients
+
+    if (dentistId !== "all") {
+      const patientIds = new Set(
+        appointments
+          .filter((a) => a.dentist_id === dentistId)
+          .map((a) => a.patient_id),
+      )
+      result = result.filter((p) => patientIds.has(p.id))
+    }
+
+    if (query.trim()) {
+      const q = query.trim().toLowerCase()
+      result = result.filter((p) => p.name.toLowerCase().includes(q))
+    }
+
+    return result
+  }, [patients, dentistId, appointments, query])
 
   return (
     <div>
@@ -53,35 +79,62 @@ export function AnamneseSearchClient() {
 
       <div className="mb-6 flex flex-wrap items-end gap-3">
         <div className="flex-1 min-w-[200px]">
-          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Nome do Paciente</label>
+          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+            Nome do Paciente
+          </label>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              ref={searchRef}
-              placeholder="Digite o nome do paciente..."
+              placeholder="Filtrar pacientes..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSearch() }}
               className="pl-8"
             />
           </div>
         </div>
 
-        <Button onClick={handleSearch} disabled={!query.trim() || loading}>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-          Buscar
-        </Button>
+        <div className="w-56">
+          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+            Dentista
+          </label>
+          <Select
+            value={dentistId}
+            onValueChange={(v) => setDentistId(v ?? "all")}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Todos os dentistas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os dentistas</SelectItem>
+              {dentists.map((d) => (
+                <SelectItem key={d.id} value={d.id}>
+                  {d.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      {searched && results.length === 0 && (
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16">
           <UserRound className="h-12 w-12 text-muted-foreground" />
-          <p className="mt-4 text-lg font-medium">Nenhum paciente encontrado</p>
-          <p className="text-sm text-muted-foreground">Tente alterar os termos da busca.</p>
+          <p className="mt-4 text-lg font-medium">
+            {patients.length === 0
+              ? "Nenhum paciente cadastrado"
+              : "Nenhum paciente encontrado"}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {patients.length === 0
+              ? "Cadastre pacientes para começar."
+              : "Tente alterar os filtros ou termos da busca."}
+          </p>
         </div>
-      )}
-
-      {results.length > 0 && (
+      ) : (
         <div className="rounded-xl border bg-card">
           <Table>
             <TableHeader>
@@ -93,7 +146,7 @@ export function AnamneseSearchClient() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {results.map((p) => (
+              {filtered.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-medium">{p.name}</TableCell>
                   <TableCell>{p.phone ?? "-"}</TableCell>

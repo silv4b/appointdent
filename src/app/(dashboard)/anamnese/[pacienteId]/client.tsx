@@ -1,6 +1,5 @@
 "use client"
 
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -10,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -25,7 +25,6 @@ import { createClient } from "@/lib/supabase/client"
 import { Database } from "@/types/database"
 import { format } from "date-fns"
 import { BookOpen, FileText, Loader2, Plus, Stethoscope } from "lucide-react"
-import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
@@ -45,7 +44,7 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
   const [sessions, setSessions] = useState<AnamneseSession[]>([])
   const [loading, setLoading] = useState(true)
   const [sessionOpen, setSessionOpen] = useState(false)
-  const [selectedAppointment, setSelectedAppointment] = useState<string>("")
+  const [sessionTitle, setSessionTitle] = useState("")
   const [sessionNotes, setSessionNotes] = useState("")
   const [saving, setSaving] = useState(false)
 
@@ -62,7 +61,7 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
         .order("start_time", { ascending: false }),
       supabase
         .from("anamnese_sessions")
-        .select("*, appointments!inner(patients(name), dentists(name))")
+        .select("*, appointments(patients(name), dentists(name))")
         .eq("patient_id", pacienteId)
         .order("created_at", { ascending: false }),
     ])
@@ -76,13 +75,14 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
   useEffect(() => { fetch() }, [fetch])
 
   const handleSaveSession = async () => {
-    if (!selectedAppointment) {
-      toast.error("Selecione um agendamento")
+    if (!sessionTitle.trim()) {
+      toast.error("Informe um título para a sessão")
       return
     }
     setSaving(true)
     const formData = new FormData()
-    formData.set("appointment_id", selectedAppointment)
+    formData.set("title", sessionTitle.trim())
+    formData.set("patient_id", pacienteId)
     formData.set("notes", sessionNotes)
     const result = await saveAnamneseSession(formData)
     if (result?.error) {
@@ -90,27 +90,11 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
     } else {
       toast.success("Sessão salva com sucesso")
       setSessionOpen(false)
-      setSelectedAppointment("")
+      setSessionTitle("")
       setSessionNotes("")
       fetch()
     }
     setSaving(false)
-  }
-
-  const statusLabel: Record<string, string> = {
-    scheduled: "Agendado",
-    confirmed: "Confirmado",
-    in_progress: "Em Andamento",
-    completed: "Concluído",
-    cancelled: "Cancelado",
-  }
-
-  const statusVariant: Record<string, string> = {
-    scheduled: "bg-primary/10 text-primary",
-    confirmed: "bg-chart-2/10 text-chart-2",
-    in_progress: "bg-warning/10 text-warning-foreground",
-    completed: "bg-success/10 text-success-foreground",
-    cancelled: "bg-destructive/10 text-destructive",
   }
 
   if (loading) {
@@ -146,6 +130,41 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
         </Button>
       </div>
 
+      {sessions.length > 0 && (
+        <div className="mb-8">
+          <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            Sessões de Anamnese ({sessions.length})
+          </h2>
+          <div className="space-y-3">
+            {sessions.map((s) => (
+              <div key={s.id} className="rounded-xl border bg-card p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">{s.title ?? "Sessão"}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {s.appointments?.dentists?.name && (
+                      <span className="text-xs text-muted-foreground">
+                        {s.appointments.dentists.name}
+                      </span>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      {format(new Date(s.created_at), "dd/MM/yyyy HH:mm")}
+                    </span>
+                  </div>
+                </div>
+                {s.notes ? (
+                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">{s.notes}</p>
+                ) : (
+                  <p className="text-sm italic text-muted-foreground/60">Nenhuma anotação</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {appointments.length > 0 && (
         <div className="mb-8">
           <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
@@ -179,8 +198,8 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
                       {format(new Date(a.start_time), "HH:mm")} - {format(new Date(a.end_time), "HH:mm")}
                     </TableCell>
                     <TableCell>
-                      <span className={`inline-flex items-center rounded-md border border-transparent px-2 py-0.5 text-[11px] font-medium capitalize shadow-sm ${statusVariant[a.status] ?? "bg-muted text-muted-foreground"}`}>
-                        {statusLabel[a.status] ?? a.status}
+                      <span className="inline-flex items-center rounded-md border border-transparent px-2 py-0.5 text-[11px] font-medium capitalize shadow-sm bg-muted text-muted-foreground">
+                        {a.status}
                       </span>
                     </TableCell>
                   </TableRow>
@@ -191,39 +210,13 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
         </div>
       )}
 
-      {sessions.length > 0 && (
-        <div>
-          <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Sessões de Anamnese ({sessions.length})
-          </h2>
-          <div className="space-y-3">
-            {sessions.map((s) => (
-              <div key={s.id} className="rounded-xl border bg-card p-4">
-                <div className="mb-2 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <BookOpen className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">{s.appointments?.dentists?.name ?? "Dentista"}</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {format(new Date(s.created_at), "dd/MM/yyyy HH:mm")}
-                  </span>
-                </div>
-                {s.notes ? (
-                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">{s.notes}</p>
-                ) : (
-                  <p className="text-sm italic text-muted-foreground/60">Nenhuma anotação</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {appointments.length === 0 && sessions.length === 0 && (
+      {sessions.length === 0 && appointments.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16">
           <FileText className="h-12 w-12 text-muted-foreground" />
           <p className="mt-4 text-lg font-medium">Nenhum registro encontrado</p>
-          <p className="text-sm text-muted-foreground">Este paciente ainda não possui atendimentos ou sessões de anamnese.</p>
+          <p className="text-sm text-muted-foreground">
+            Este paciente ainda não possui atendimentos ou sessões de anamnese.
+          </p>
         </div>
       )}
 
@@ -232,30 +225,26 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
           <DialogHeader>
             <DialogTitle>Nova Sessão de Anamnese</DialogTitle>
             <DialogDescription>
-              Adicione anotações sobre a sessão do paciente {patient.name}.
+              Adicione uma sessão de anamnese para {patient.name}.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div>
-              <Label>Agendamento Relacionado</Label>
-              <select
-                className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                value={selectedAppointment}
-                onChange={(e) => setSelectedAppointment(e.target.value)}
-              >
-                <option value="">Selecione um agendamento...</option>
-                {appointments.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {format(new Date(a.start_time), "dd/MM/yyyy HH:mm")} - {a.dentists?.name} - {a.procedures?.name ?? "Sem procedimento"}
-                  </option>
-                ))}
-              </select>
+              <Label htmlFor="title">Título da Sessão</Label>
+              <Input
+                id="title"
+                placeholder="Ex: Sessão de saúde bucal"
+                value={sessionTitle}
+                onChange={(e) => setSessionTitle(e.target.value)}
+                className="mt-1"
+              />
             </div>
 
             <div>
-              <Label>Anotações</Label>
+              <Label htmlFor="notes">Anotações</Label>
               <Textarea
+                id="notes"
                 className="mt-1"
                 placeholder="Descreva as observações da sessão..."
                 value={sessionNotes}
@@ -267,7 +256,7 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setSessionOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSaveSession} disabled={saving || !selectedAppointment}>
+            <Button onClick={handleSaveSession} disabled={saving || !sessionTitle.trim()}>
               {saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
               Salvar Sessão
             </Button>

@@ -74,7 +74,7 @@ export async function getPatientAnamneseHistory(patientId: string) {
       .order("start_time", { ascending: false }),
     supabase
       .from("anamnese_sessions")
-      .select("*, appointments!inner(patients(name), dentists(name))")
+      .select("*, appointments(patients(name), dentists(name))")
       .eq("patient_id", patientId)
       .order("created_at", { ascending: false }),
   ])
@@ -101,18 +101,11 @@ export async function saveAnamneseSession(formData: FormData) {
 
   if (!dentist) return err("Perfil de dentista não encontrado")
 
-  const { data: appointment } = await supabase
-    .from("appointments")
-    .select("patient_id")
-    .eq("id", parsed.data.appointment_id)
-    .single()
-
-  if (!appointment) return err("Agendamento não encontrado")
-
   const { error } = await supabase.from("anamnese_sessions").insert({
-    appointment_id: parsed.data.appointment_id,
+    title: parsed.data.title,
+    appointment_id: parsed.data.appointment_id || null,
     dentist_id: dentist.id,
-    patient_id: appointment.patient_id,
+    patient_id: parsed.data.patient_id,
     notes: parsed.data.notes || null,
   })
 
