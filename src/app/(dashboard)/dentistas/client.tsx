@@ -20,8 +20,10 @@ import {
 } from "@/lib/actions/dentists"
 import { createClient } from "@/lib/supabase/client"
 import { Database } from "@/types/database"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { Pencil, Plus, Search, Trash2, X } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 
 type Dentist = Database["public"]["Tables"]["dentists"]["Row"]
 
@@ -29,6 +31,7 @@ export function DentistsClient() {
   const [dentists, setDentists] = useState<Dentist[]>([])
   const [edit, setEdit] = useState<Dentist | null>(null)
   const [open, setOpen] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -62,7 +65,9 @@ export function DentistsClient() {
   const handleDelete = async (id: string) => {
     const form = new FormData()
     form.set("id", id)
-    await deleteDentist(form)
+    const result = await deleteDentist(form)
+    if (result?.error) toast.error(result.error)
+    else toast.success("Dentista excluído")
     setPage(1)
     fetch(1)
   }
@@ -73,7 +78,7 @@ export function DentistsClient() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dentistas</h1>
           <p className="mt-1 text-muted-foreground">
-            Gerencie os profissionais da clínica
+            Gerencie o cadastro de dentistas
           </p>
         </div>
         <Button onClick={() => { setEdit(null); setOpen(true) }}>
@@ -144,7 +149,7 @@ export function DentistsClient() {
                       <Button variant="ghost" size="icon" onClick={() => { setEdit(d); setOpen(true) }}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(d.id)}>
+                      <Button variant="ghost" size="icon" onClick={() => setDeleteId(d.id)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
@@ -179,6 +184,16 @@ export function DentistsClient() {
           { name: "email", label: "Email", type: "email" as const, placeholder: "email@exemplo.com", defaultValue: edit?.email ?? "" },
         ]}
         action={edit ? updateDentist : createDentist}
+        successMessage={edit ? "Dentista atualizado" : "Dentista cadastrado"}
+      />
+
+      <ConfirmDialog
+        open={deleteId !== null}
+        onOpenChange={() => setDeleteId(null)}
+        title="Excluir Dentista"
+        description="Tem certeza que deseja excluir este dentista? Esta ação não pode ser desfeita."
+        confirmLabel="Excluir"
+        onConfirm={() => { if (deleteId) handleDelete(deleteId) }}
       />
     </div>
   )

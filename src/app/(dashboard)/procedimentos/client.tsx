@@ -20,8 +20,10 @@ import {
 } from "@/lib/actions/procedures"
 import { createClient } from "@/lib/supabase/client"
 import { Database } from "@/types/database"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { Pencil, Plus, Search, Trash2, X } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 
 type Procedure = Database["public"]["Tables"]["procedures"]["Row"]
 
@@ -29,6 +31,7 @@ export function ProceduresClient() {
   const [procedures, setProcedures] = useState<Procedure[]>([])
   const [edit, setEdit] = useState<Procedure | null>(null)
   const [open, setOpen] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -62,7 +65,9 @@ export function ProceduresClient() {
   const handleDelete = async (id: string) => {
     const form = new FormData()
     form.set("id", id)
-    await deleteProcedure(form)
+    const result = await deleteProcedure(form)
+    if (result?.error) toast.error(result.error)
+    else toast.success("Procedimento excluído")
     setPage(1)
     fetch(1)
   }
@@ -158,7 +163,7 @@ export function ProceduresClient() {
                       <Button variant="ghost" size="icon" onClick={() => { setEdit(p); setOpen(true) }}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(p.id)}>
+                      <Button variant="ghost" size="icon" onClick={() => setDeleteId(p.id)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
@@ -206,6 +211,16 @@ export function ProceduresClient() {
           { name: "color", label: "Cor", type: "color" as const, defaultValue: edit?.color ?? "#3b82f6" },
         ]}
         action={edit ? updateProcedure : createProcedure}
+        successMessage={edit ? "Procedimento atualizado" : "Procedimento cadastrado"}
+      />
+
+      <ConfirmDialog
+        open={deleteId !== null}
+        onOpenChange={() => setDeleteId(null)}
+        title="Excluir Procedimento"
+        description="Tem certeza que deseja excluir este procedimento? Esta ação não pode ser desfeita."
+        confirmLabel="Excluir"
+        onConfirm={() => { if (deleteId) handleDelete(deleteId) }}
       />
     </div>
   )

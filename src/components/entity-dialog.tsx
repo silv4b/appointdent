@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useActionState, useEffect, useState } from "react"
+import { toast } from "sonner"
 
 export interface Field {
   name: string
@@ -30,6 +31,7 @@ interface EntityDialogProps {
   description: string
   fields: Field[]
   action: (formData: FormData) => Promise<{ error?: string } | null | undefined>
+  successMessage?: string
 }
 
 export function EntityDialog({
@@ -39,12 +41,16 @@ export function EntityDialog({
   description,
   fields,
   action,
+  successMessage,
 }: EntityDialogProps) {
   const [state, formAction, isPending] = useActionState(
     async (_: { error?: string } | null, formData: FormData) => {
       const result = await action(formData)
       if (!result?.error) {
+        if (successMessage) toast.success(successMessage)
         onOpenChange(false)
+      } else {
+        toast.error(result.error)
       }
       return result ?? null
     },
@@ -78,6 +84,7 @@ export function EntityDialog({
                   defaultValue={field.defaultValue}
                   required={field.required}
                   step={field.step}
+                  key={`${field.name}:${field.defaultValue ?? ""}`}
                 />
               </div>
             ),

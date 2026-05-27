@@ -22,8 +22,10 @@ import { createClient } from "@/lib/supabase/client"
 import { Database } from "@/types/database"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { Pencil, Plus, Search, Trash2, X } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 
 type Patient = Database["public"]["Tables"]["patients"]["Row"]
 
@@ -31,6 +33,7 @@ export function PatientsClient() {
   const [patients, setPatients] = useState<Patient[]>([])
   const [edit, setEdit] = useState<Patient | null>(null)
   const [open, setOpen] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -64,7 +67,9 @@ export function PatientsClient() {
   const handleDelete = async (id: string) => {
     const form = new FormData()
     form.set("id", id)
-    await deletePatient(form)
+    const result = await deletePatient(form)
+    if (result?.error) toast.error(result.error)
+    else toast.success("Paciente excluído")
     setPage(1)
     fetch(1)
   }
@@ -150,7 +155,7 @@ export function PatientsClient() {
                       <Button variant="ghost" size="icon" onClick={() => { setEdit(p); setOpen(true) }}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(p.id)}>
+                      <Button variant="ghost" size="icon" onClick={() => setDeleteId(p.id)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
@@ -186,6 +191,16 @@ export function PatientsClient() {
           { name: "notes", label: "Observações", defaultValue: edit?.notes ?? "" },
         ]}
         action={edit ? updatePatient : createPatient}
+        successMessage={edit ? "Paciente atualizado" : "Paciente cadastrado"}
+      />
+
+      <ConfirmDialog
+        open={deleteId !== null}
+        onOpenChange={() => setDeleteId(null)}
+        title="Excluir Paciente"
+        description="Tem certeza que deseja excluir este paciente? Esta ação não pode ser desfeita."
+        confirmLabel="Excluir"
+        onConfirm={() => { if (deleteId) handleDelete(deleteId) }}
       />
     </div>
   )

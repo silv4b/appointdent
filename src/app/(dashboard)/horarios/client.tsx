@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import {
   Dialog,
   DialogContent,
@@ -26,7 +27,8 @@ import {
 } from "@/lib/actions/availability-slots"
 import { createClient } from "@/lib/supabase/client"
 import { Database } from "@/types/database"
-import { Clock, Pencil, Plus, Trash2 } from "lucide-react"
+import { ChevronDown, Clock, Pencil, Plus, Trash2 } from "lucide-react"
+import { toast } from "sonner"
 import { useCallback, useEffect, useState } from "react"
 
 type Slot = Database["public"]["Tables"]["availability_slots"]["Row"] & {
@@ -67,6 +69,7 @@ function SlotDialog({
           </DialogDescription>
         </DialogHeader>
         <form
+          key={slot?.id ?? "new"}
           onSubmit={async (e) => {
             e.preventDefault()
             setSaving(true)
@@ -90,7 +93,7 @@ function SlotDialog({
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="day_of_week">Dia da Semana</Label>
-            <Select name="day_of_week" value={dayOfWeek} onValueChange={(v) => setDayOfWeek(v ?? "1")} required>
+            <Select name="day_of_week" value={dayOfWeek} onValueChange={(v) => setDayOfWeek(v ?? "1")} required itemToStringLabel={(value) => DAY_NAMES[parseInt(value as string)] ?? String(value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione o dia" />
               </SelectTrigger>
@@ -143,6 +146,8 @@ export function HorariosClient() {
   const [dentists, setDentists] = useState<Dentist[]>([])
   const [edit, setEdit] = useState<Slot | null>(null)
   const [open, setOpen] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [selectedDentistId, setSelectedDentistId] = useState<string | undefined>(undefined)
   const [loading, setLoading] = useState(true)
 
@@ -169,7 +174,9 @@ export function HorariosClient() {
   const handleDelete = async (id: string) => {
     const form = new FormData()
     form.set("id", id)
-    await deleteAvailabilitySlot(form)
+    const result = await deleteAvailabilitySlot(form)
+    if (result?.error) toast.error(result.error)
+    else toast.success("Horário excluído")
     fetch()
   }
 
@@ -178,8 +185,11 @@ export function HorariosClient() {
       ? await updateAvailabilitySlot(formData)
       : await createAvailabilitySlot(formData)
     if (!result?.error) {
+      toast.success(edit ? "Horário atualizado" : "Horário cadastrado")
       setOpen(false)
       fetch()
+    } else {
+      toast.error(result.error)
     }
     return result
   }
@@ -191,6 +201,10 @@ export function HorariosClient() {
       slots: slots.filter((s) => s.dentist_id === dentist.id),
     }))
     .filter((g) => g.slots.length > 0)
+
+  const toggleExpanded = (id: string) => {
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
 
   const dentistsWithoutSlots = dentists.filter(
     (d) => d.active && !slots.some((s) => s.dentist_id === d.id)
@@ -213,63 +227,77 @@ export function HorariosClient() {
         </div>
       ) : (
         <div className="space-y-6">
-          {grouped.map(({ dentist, slots: dentistSlots }) => (
-            <div key={dentist.id} className="rounded-2xl border bg-card shadow-md">
-              <div className="flex items-center justify-between border-b px-6 py-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-                    <Clock className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-semibold">{dentist.name}</h2>
-                    <p className="text-xs text-muted-foreground">{dentist.specialty ?? "Sem especialidade"}</p>
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setEdit(null)
-                    setSelectedDentistId(dentist.id)
-                    setOpen(true)
-                  }}
+          {grouped.map(({ dentist, slots: dentistSlots }) => {
+            const isExpanded = expanded[dentist.id] ?? true
+            return (
+              <div key={dentist.id} className="rounded-2xl border bg-card shadow-md">
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(dentist.id)}
+                  className="flex w-full items-center justify-between border-b px-6 py-4 text-left transition-colors hover:bg-muted/20"
                 >
-                  <Plus className="mr-1.5 h-4 w-4" />
-                  Novo Horário
-                </Button>
-              </div>
-
-              <div className="divide-y">
-                {dentistSlots.map((s) => (
-                  <div key={s.id} className="flex items-center justify-between px-6 py-3 transition-colors hover:bg-muted/30">
-                    <div className="flex items-center gap-4">
-                      <Badge variant="outline" className="min-w-[3rem] justify-center">
-                        {DAY_NAMES[s.day_of_week]}
-                      </Badge>
-                      <span className="text-sm font-medium">
-                        {s.start_time.slice(0, 5)} - {s.end_time.slice(0, 5)}
-                      </span>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+                      <Clock className="h-5 w-5 text-primary" />
                     </div>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setEdit(s)
-                          setSelectedDentistId(undefined)
-                          setOpen(true)
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(s.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                    <div>
+                      <h2 className="text-base font-semibold">{dentist.name}</h2>
+                      <p className="text-xs text-muted-foreground">{dentist.specialty ?? "Sem especialidade"}</p>
                     </div>
                   </div>
-                ))}
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setEdit(null)
+                        setSelectedDentistId(dentist.id)
+                        setOpen(true)
+                      }}
+                    >
+                      <Plus className="mr-1.5 h-4 w-4" />
+                      Novo Horário
+                    </Button>
+                    <ChevronDown
+                      className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${isExpanded ? "rotate-0" : "-rotate-90"}`}
+                    />
+                  </div>
+                </button>
+
+                {isExpanded && (
+                  <div className="divide-y">
+                    {dentistSlots.map((s) => (
+                      <div key={s.id} className="flex items-center justify-between px-6 py-3 transition-colors hover:bg-muted/30">
+                        <div className="flex items-center gap-4">
+                          <Badge variant="outline" className="min-w-[3rem] justify-center">
+                            {DAY_NAMES[s.day_of_week]}
+                          </Badge>
+                          <span className="text-sm font-medium">
+                            {s.start_time.slice(0, 5)} - {s.end_time.slice(0, 5)}
+                          </span>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setEdit(s)
+                              setSelectedDentistId(undefined)
+                              setOpen(true)
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => setDeleteId(s.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            )
+          })}
 
           {dentistsWithoutSlots.length > 0 && (
             <div className="rounded-2xl border border-dashed bg-card/50 p-6">
@@ -282,6 +310,7 @@ export function HorariosClient() {
                     size="sm"
                     onClick={() => {
                       setEdit(null)
+                      setExpanded((prev) => ({ ...prev, [d.id]: true }))
                       setSelectedDentistId(d.id)
                       setOpen(true)
                     }}
@@ -313,6 +342,15 @@ export function HorariosClient() {
         slot={edit}
         dentistId={selectedDentistId}
         onSave={handleSave}
+      />
+
+      <ConfirmDialog
+        open={deleteId !== null}
+        onOpenChange={() => setDeleteId(null)}
+        title="Excluir Horário"
+        description="Tem certeza que deseja excluir este horário? Esta ação não pode ser desfeita."
+        confirmLabel="Excluir"
+        onConfirm={() => { if (deleteId) handleDelete(deleteId) }}
       />
     </div>
   )

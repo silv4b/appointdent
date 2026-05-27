@@ -25,11 +25,11 @@ export function DashboardHeader({ onMenuToggle }: DashboardHeaderProps) {
 
   const initials = userName
     ? userName
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2)
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2)
     : userEmail
       ? userEmail[0].toUpperCase()
       : "?"
@@ -45,23 +45,23 @@ export function DashboardHeader({ onMenuToggle }: DashboardHeaderProps) {
           >
             <Menu className="h-4 w-4" />
           </button>
-          <div className="relative hidden h-9 w-72 items-center rounded-lg border border-input bg-muted/40 pl-9 pr-4 text-sm text-muted-foreground/50 sm:flex">
+          {/* <div className="relative hidden h-9 w-72 items-center rounded-lg border border-input bg-muted/40 pl-9 pr-4 text-sm text-muted-foreground/50 sm:flex">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
             <span>Buscar...</span>
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-border bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
               Ctrl K
             </span>
-          </div>
+          </div> */}
         </div>
 
         {/* Right side */}
         <div className="flex items-center gap-2">
-          <Link href="/agenda">
+          {/* <Link href="/agenda">
             <Button size="sm">
               <Plus className="h-4 w-4" />
               Novo Agendamento
             </Button>
-          </Link>
+          </Link> */}
 
           <button
             className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
