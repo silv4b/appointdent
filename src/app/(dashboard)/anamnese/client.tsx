@@ -16,57 +16,125 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { DataTablePagination } from "@/components/data-table-pagination"
 import { createClient } from "@/lib/supabase/client"
 import { Database } from "@/types/database"
-import { useEffect, useMemo, useState } from "react"
-import { Loader2, Search, UserRound, FileText } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, Search, UserRound, FileText, X } from "lucide-react"
 import Link from "next/link"
 
 type Patient = Database["public"]["Tables"]["patients"]["Row"]
 type Dentist = Database["public"]["Tables"]["dentists"]["Row"]
-type AppointmentLink = Pick<Database["public"]["Tables"]["appointments"]["Row"], "patient_id" | "dentist_id">
 
 export function AnamneseSearchClient() {
   const [query, setQuery] = useState("")
   const [dentistId, setDentistId] = useState("all")
   const [patients, setPatients] = useState<Patient[]>([])
   const [dentists, setDentists] = useState<Dentist[]>([])
-  const [appointments, setAppointments] = useState<AppointmentLink[]>([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [total, setTotal] = useState(0)
+  const [sortColumn, setSortColumn] = useState<"name" | "birth_date">("name")
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc")
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  const fetch = useCallback(
+    async (p?: number, ps?: number, q?: string, dId?: string) => {
+      const pageNum = p ?? page
+      const pageSizeNum = ps ?? pageSize
+      const searchTerm = q ?? query
+      const dentistFilter = dId ?? dentistId
+
+      const supabase = createClient()
+
+      let patientIds: string[] | null = null
+      if (dentistFilter !== "all") {
+        const { data: appts } = await supabase
+          .from("appointments")
+          .select("patient_id")
+          .eq("dentist_id", dentistFilter)
+        patientIds = [...new Set((appts ?? []).map((a) => a.patient_id))]
+      }
+
+      let queryBuilder = supabase
+        .from("patients")
+        .select("*", { count: "exact" })
+        .order("name")
+
+      if (patientIds !== null) {
+        if (patientIds.length === 0) {
+          setPatients([])
+          setTotal(0)
+          setLoading(false)
+          return
+        }
+        queryBuilder = queryBuilder.in("id", patientIds)
+      }
+
+      if (searchTerm.trim()) {
+        queryBuilder = queryBuilder.ilike("name", `%${searchTerm.trim()}%`)
+      }
+
+      const { data, count } = await queryBuilder.range(
+        (pageNum - 1) * pageSizeNum,
+        pageNum * pageSizeNum - 1,
+      )
+
+      setPatients(data ?? [])
+      if (count !== null) setTotal(count)
+      setLoading(false)
+    },
+    [page, pageSize, query, dentistId],
+  )
 
   useEffect(() => {
     const supabase = createClient()
-    Promise.all([
-      supabase.from("patients").select("*").order("name").limit(500),
-      supabase.from("dentists").select("*").order("name"),
-      supabase.from("appointments").select("patient_id, dentist_id"),
-    ]).then(([patientsRes, dentistsRes, apptsRes]) => {
-      setPatients(patientsRes.data ?? [])
-      setDentists(dentistsRes.data ?? [])
-      setAppointments(apptsRes.data ?? [])
-      setLoading(false)
-    })
+    supabase
+      .from("dentists")
+      .select("*")
+      .order("name")
+      .then((res) => setDentists(res.data ?? []))
   }, [])
 
-  const filtered = useMemo(() => {
-    let result = patients
+  useEffect(() => {
+    setLoading(true)
+    fetch()
+  }, [fetch])
 
-    if (dentistId !== "all") {
-      const patientIds = new Set(
-        appointments
-          .filter((a) => a.dentist_id === dentistId)
-          .map((a) => a.patient_id),
-      )
-      result = result.filter((p) => patientIds.has(p.id))
+  const handleSearchChange = (value: string) => {
+    setQuery(value)
+    setPage(1)
+    setLoading(true)
+    fetch(1, pageSize, value, dentistId)
+  }
+
+  const handleDentistChange = (value: string | null) => {
+    const v = value ?? "all"
+    setDentistId(v)
+    setPage(1)
+    setLoading(true)
+    fetch(1, pageSize, query, v)
+  }
+
+  const toggleSort = (col: typeof sortColumn) => {
+    if (sortColumn === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"))
+    } else {
+      setSortColumn(col)
+      setSortDir("asc")
     }
+  }
 
-    if (query.trim()) {
-      const q = query.trim().toLowerCase()
-      result = result.filter((p) => p.name.toLowerCase().includes(q))
+  const sorted = [...patients].sort((a, b) => {
+    const dir = sortDir === "asc" ? 1 : -1
+    if (sortColumn === "birth_date") {
+      const aDate = a.birth_date ? new Date(a.birth_date).getTime() : 0
+      const bDate = b.birth_date ? new Date(b.birth_date).getTime() : 0
+      return (aDate - bDate) * dir
     }
-
-    return result
-  }, [patients, dentistId, appointments, query])
+    return (a.name ?? "").localeCompare(b.name ?? "", "pt-BR") * dir
+  })
 
   return (
     <div>
@@ -77,32 +145,39 @@ export function AnamneseSearchClient() {
         </p>
       </div>
 
-      <div className="mb-6 flex flex-wrap items-end gap-3">
-        <div className="flex-1 min-w-[200px]">
-          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-            Nome do Paciente
-          </label>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="rounded-lg border bg-card">
+        <div className="flex items-center gap-2 border-b px-4 py-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              ref={searchRef}
               placeholder="Filtrar pacientes..."
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="pl-8"
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="h-9 pl-9 pr-8"
             />
+            {query && (
+              <button
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  handleSearchChange("")
+                  searchRef.current?.focus()
+                }}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
-        </div>
-
-        <div className="w-56">
-          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-            Dentista
-          </label>
           <Select
             value={dentistId}
-            onValueChange={(v) => setDentistId(v ?? "all")}
+            onValueChange={handleDentistChange}
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Todos os dentistas" />
+            <SelectTrigger className="h-9 w-40">
+              <SelectValue placeholder="Todos os dentistas">
+                {dentistId === "all"
+                  ? "Todos os dentistas"
+                  : dentists.find((d) => d.id === dentistId)?.name ?? "Todos os dentistas"}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os dentistas</SelectItem>
@@ -114,43 +189,64 @@ export function AnamneseSearchClient() {
             </SelectContent>
           </Select>
         </div>
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16">
-          <UserRound className="h-12 w-12 text-muted-foreground" />
-          <p className="mt-4 text-lg font-medium">
-            {patients.length === 0
-              ? "Nenhum paciente cadastrado"
-              : "Nenhum paciente encontrado"}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {patients.length === 0
-              ? "Cadastre pacientes para começar."
-              : "Tente alterar os filtros ou termos da busca."}
-          </p>
-        </div>
-      ) : (
-        <div className="rounded-xl border bg-card">
-          <Table>
-            <TableHeader>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("name")}>
+                <span className="flex items-center gap-1">
+                  Paciente
+                  {sortColumn === "name" ? (
+                    sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                  ) : (
+                    <ArrowUpDown className="h-3 w-3 opacity-30" />
+                  )}
+                </span>
+              </TableHead>
+              <TableHead>Telefone</TableHead>
+              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("birth_date")}>
+                <span className="flex items-center gap-1">
+                  Data de Nasc.
+                  {sortColumn === "birth_date" ? (
+                    sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                  ) : (
+                    <ArrowUpDown className="h-3 w-3 opacity-30" />
+                  )}
+                </span>
+              </TableHead>
+              <TableHead className="w-28" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
               <TableRow>
-                <TableHead>Paciente</TableHead>
-                <TableHead>Telefone</TableHead>
-                <TableHead>Data de Nasc.</TableHead>
-                <TableHead className="w-28" />
+                <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                  <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((p) => (
+            ) : patients.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                  <div className="flex flex-col items-center gap-2">
+                    <UserRound className="h-8 w-8 text-muted-foreground/50" />
+                    <p className="text-sm font-medium">
+                      {total === 0 && !query && dentistId === "all"
+                        ? "Nenhum paciente cadastrado"
+                        : "Nenhum paciente encontrado"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {total === 0 && !query && dentistId === "all"
+                        ? "Cadastre pacientes para começar."
+                        : "Tente alterar os filtros ou termos da busca."}
+                    </p>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : (
+              sorted.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-medium">{p.name}</TableCell>
                   <TableCell>{p.phone ?? "-"}</TableCell>
-                  <TableCell>{p.birth_date ?? "-"}</TableCell>
+                  <TableCell>{p.birth_date ? new Date(p.birth_date).toLocaleDateString("pt-BR") : "-"}</TableCell>
                   <TableCell>
                     <Link
                       href={`/anamnese/${p.id}`}
@@ -161,11 +257,27 @@ export function AnamneseSearchClient() {
                     </Link>
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+              ))
+            )}
+          </TableBody>
+        </Table>
+        <DataTablePagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={(p) => {
+            setPage(p)
+            setLoading(true)
+            fetch(p, pageSize, query, dentistId)
+          }}
+          onPageSizeChange={(s) => {
+            setPageSize(s)
+            setPage(1)
+            setLoading(true)
+            fetch(1, s, query, dentistId)
+          }}
+        />
+      </div>
     </div>
   )
 }

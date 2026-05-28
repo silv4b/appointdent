@@ -27,11 +27,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { deleteAnamneseSession, saveAnamneseSession, updateAnamneseSession } from "@/lib/actions/anamnese"
+import { deleteAnamneseSession, getAnamneseForExport, saveAnamneseSession, updateAnamneseSession } from "@/lib/actions/anamnese"
+import { generateAnamnesePdf } from "@/lib/utils/export-anamnese-pdf"
 import { createClient } from "@/lib/supabase/client"
 import { Database } from "@/types/database"
 import { format } from "date-fns"
-import { BookOpen, FileText, GripVertical, Loader2, Pen, Plus, Stethoscope, Trash2 } from "lucide-react"
+import { BookOpen, FileDown, FileText, GripVertical, Loader2, Pen, Plus, Stethoscope, Trash2 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -76,35 +77,35 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
     let cancelled = false
     setLoading(true)
 
-    ;(async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      ; (async () => {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
 
-      const [patientRes, apptsRes, sessionsRes, profileRes, dentistsRes] = await Promise.all([
-        supabase.from("patients").select("*").eq("id", pacienteId).single(),
-        supabase
-          .from("appointments")
-          .select("*, patients(name), dentists(name), procedures(name, color, duration_minutes)")
-          .eq("patient_id", pacienteId)
-          .order("start_time", { ascending: false }),
-        supabase
-          .from("anamnese_sessions")
-          .select("*, appointments(patients(name), dentists(name))")
-          .eq("patient_id", pacienteId)
-          .order("created_at", { ascending: false }),
-        supabase.from("profiles").select("role").eq("id", user?.id ?? "").single(),
-        supabase.from("dentists").select("*").order("name"),
-      ])
+        const [patientRes, apptsRes, sessionsRes, profileRes, dentistsRes] = await Promise.all([
+          supabase.from("patients").select("*").eq("id", pacienteId).single(),
+          supabase
+            .from("appointments")
+            .select("*, patients(name), dentists(name), procedures(name, color, duration_minutes)")
+            .eq("patient_id", pacienteId)
+            .order("start_time", { ascending: false }),
+          supabase
+            .from("anamnese_sessions")
+            .select("*, appointments(patients(name), dentists(name))")
+            .eq("patient_id", pacienteId)
+            .order("created_at", { ascending: false }),
+          supabase.from("profiles").select("role").eq("id", user?.id ?? "").single(),
+          supabase.from("dentists").select("*").order("name"),
+        ])
 
-      if (cancelled) return
+        if (cancelled) return
 
-      setPatient(patientRes.data ?? null)
-      setAppointments(apptsRes.data ?? [])
-      setSessions(sessionsRes.data as AnamneseSession[] ?? [])
-      setUserRole(profileRes.data?.role ?? null)
-      setDentists(dentistsRes.data ?? [])
-      setLoading(false)
-    })()
+        setPatient(patientRes.data ?? null)
+        setAppointments(apptsRes.data ?? [])
+        setSessions(sessionsRes.data as AnamneseSession[] ?? [])
+        setUserRole(profileRes.data?.role ?? null)
+        setDentists(dentistsRes.data ?? [])
+        setLoading(false)
+      })()
 
     return () => { cancelled = true }
   }, [pacienteId])
@@ -232,6 +233,29 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
     setDeleting(false)
   }
 
+  const handleExportSession = async (sessionId: string) => {
+    const result = await getAnamneseForExport(sessionId)
+    if ("error" in result) {
+      toast.error(result.error)
+      return
+    }
+    generateAnamnesePdf(result.data)
+    toast.success("PDF exportado com sucesso")
+  }
+
+  const handleExportAll = async () => {
+    for (const s of sessions) {
+      const result = await getAnamneseForExport(s.id)
+      if ("error" in result) {
+        toast.error(`Erro ao exportar "${s.title}": ${result.error}`)
+        continue
+      }
+      generateAnamnesePdf(result.data)
+      await new Promise((r) => setTimeout(r, 500))
+    }
+    toast.success("Todas as sessões exportadas")
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -252,12 +276,18 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
   return (
     <div className="grid grid-cols-1 gap-8 xl:grid-cols-5">
       {/* Sidebar — Sessões anteriores */}
-      <div className="order-2 space-y-6 xl:order-1 xl:col-span-2">
+      <div className="mt-11 order-2 space-y-6 xl:order-1 xl:col-span-2">
         {sessions.length > 0 ? (
           <>
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-              Sessões Anteriores ({sessions.length})
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Sessões Anteriores ({sessions.length})
+              </h2>
+              <Button variant="outline" size="sm" onClick={handleExportAll} title="Exportar todas as sessões">
+                <FileDown className="mr-1 h-3.5 w-3.5" />
+                Exportar Todas
+              </Button>
+            </div>
             <div className="space-y-4">
               {sessions.map((s) => (
                 <div key={s.id} className="rounded-xl border bg-card p-4">
@@ -270,6 +300,9 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
                       <span className="text-xs text-muted-foreground whitespace-nowrap">
                         {format(new Date(s.created_at), "dd/MM/yyyy HH:mm")}
                       </span>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleExportSession(s.id)} title="Exportar PDF">
+                        <FileDown className="h-3 w-3" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(s)}>
                         <Pen className="h-3 w-3" />
                       </Button>

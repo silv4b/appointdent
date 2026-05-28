@@ -398,9 +398,12 @@ function AppointmentDialog({
   procedures,
   onSave,
   onDelete,
+  onCreateReturn,
   createdPatientId,
   onPatientCreated,
   returnToId,
+  userRole,
+  currentDentistId,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -412,9 +415,12 @@ function AppointmentDialog({
   procedures: Procedure[]
   onSave: (formData: FormData) => Promise<{ error?: string } | null | undefined>
   onDelete?: (id: string) => void
+  onCreateReturn?: (appointment: Appointment) => void
   createdPatientId?: string | null
   onPatientCreated?: (patient: { id: string; name: string }) => void
   returnToId?: string | null
+  userRole?: string | null
+  currentDentistId?: string | null
 }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -531,42 +537,49 @@ function AppointmentDialog({
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="dentist_id">Dentista</Label>
-              <Select
-                name="dentist_id"
-                defaultValue={appointment?.dentist_id ?? ""}
-                required
-                itemToStringLabel={(value) => dentists.find((d) => d.id === value)?.name ?? String(value)}
-                onOpenChangeComplete={(open) => {
-                  if (open) setTimeout(() => dentistSearchRef.current?.focus(), 30)
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                    <div onPointerDown={(e) => e.stopPropagation()} className="px-1 pb-1 pt-0.5">
-                      <Input
-                        ref={dentistSearchRef}
-                        placeholder="Pesquisar dentista..."
-                        value={dentistSearch}
-                        onChange={(e) => setDentistSearch(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(e.key)) return
-                          e.stopPropagation()
-                        }}
-                        autoFocus
-                        className="h-7 text-xs"
-                      />
-                    </div>
-                  {filteredDentists.length > 0 ? filteredDentists.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.name}
-                    </SelectItem>
-                  )) : (
-                    <div className="px-2 py-3 text-center text-xs text-muted-foreground">Nenhum dentista encontrado</div>
-                  )}
-                </SelectContent>
-              </Select>
+              {userRole === "dentist" && currentDentistId ? (
+                <div className="flex h-9 items-center gap-2 rounded-md border bg-muted/30 px-3 text-sm text-muted-foreground">
+                  <input type="hidden" name="dentist_id" value={currentDentistId} />
+                  {dentists.find((d) => d.id === currentDentistId)?.name ?? "Carregando..."}
+                </div>
+              ) : (
+                <Select
+                  name="dentist_id"
+                  defaultValue={appointment?.dentist_id ?? ""}
+                  required
+                  itemToStringLabel={(value) => dentists.find((d) => d.id === value)?.name ?? String(value)}
+                  onOpenChangeComplete={(open) => {
+                    if (open) setTimeout(() => dentistSearchRef.current?.focus(), 30)
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                      <div onPointerDown={(e) => e.stopPropagation()} className="px-1 pb-1 pt-0.5">
+                        <Input
+                          ref={dentistSearchRef}
+                          placeholder="Pesquisar dentista..."
+                          value={dentistSearch}
+                          onChange={(e) => setDentistSearch(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(e.key)) return
+                            e.stopPropagation()
+                          }}
+                          autoFocus
+                          className="h-7 text-xs"
+                        />
+                      </div>
+                    {filteredDentists.length > 0 ? filteredDentists.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.name}
+                      </SelectItem>
+                    )) : (
+                      <div className="px-2 py-3 text-center text-xs text-muted-foreground">Nenhum dentista encontrado</div>
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
 
@@ -653,10 +666,16 @@ function AppointmentDialog({
 
           <DialogFooter className="gap-2">
             {appointment && (
-              <Button type="button" variant="destructive" size="sm" onClick={() => setConfirmDeleteOpen(true)}>
-                <Trash2 className="mr-1 h-3 w-3" />
-                Excluir
-              </Button>
+              <>
+                <Button type="button" variant="outline" size="sm" onClick={() => onCreateReturn?.(appointment)}>
+                  <RotateCcw className="mr-1 h-3 w-3" />
+                  Criar Retorno
+                </Button>
+                <Button type="button" variant="destructive" size="sm" onClick={() => setConfirmDeleteOpen(true)}>
+                  <Trash2 className="mr-1 h-3 w-3" />
+                  Excluir
+                </Button>
+              </>
             )}
             <Button type="submit" disabled={saving}>
               {saving ? "Salvando..." : appointment ? "Atualizar" : "Agendar"}
@@ -775,16 +794,31 @@ export function AgendaClient() {
   const [createdPatientId, setCreatedPatientId] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorage("agenda:sidebarCollapsed", false)
 
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [currentDentistId, setCurrentDentistId] = useState<string | null>(null)
+  const [isReady, setIsReady] = useState(false)
+
   useEffect(() => {
     const supabase = createClient()
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
-      supabase.from("profiles").select("role").eq("id", user.id).single().then(({ data: profile }) => {
-        if (profile?.role === "dentist") {
-          supabase.from("dentists").select("id").eq("profile_id", user.id).single().then(({ data: dentist }) => {
-            if (dentist) setSelectedDentist(dentist.id)
-          })
+      supabase.from("profiles").select("role").eq("id", user.id).single().then(async ({ data: profile }) => {
+        const role = profile?.role ?? null
+        setUserRole(role)
+
+        if (role === "dentist") {
+          const { data: dentist } = await supabase
+            .from("dentists")
+            .select("id")
+            .eq("profile_id", user.id)
+            .single()
+          if (dentist) {
+            setCurrentDentistId(dentist.id)
+            setSelectedDentist(dentist.id)
+          }
         }
+
+        setIsReady(true)
       })
     })
   }, [])
@@ -794,14 +828,18 @@ export function AgendaClient() {
     const startStr = toDateInput(start)
     const endStr = toDateInput(end)
 
+    let query = supabase
+      .from("appointments")
+      .select("*, patients(name), dentists(name), procedures(name, color, duration_minutes)")
+      .gte("start_time", `${startStr}T00:00:00Z`)
+      .lte("start_time", `${endStr}T23:59:59Z`)
+
+    if (userRole === "dentist" && currentDentistId) {
+      query = query.eq("dentist_id", currentDentistId)
+    }
+
     const [appointmentsData, dentistsData, patientsData, proceduresData] = await Promise.all([
-      supabase
-        .from("appointments")
-        .select("*, patients(name), dentists(name), procedures(name, color, duration_minutes)")
-        .gte("start_time", `${startStr}T00:00:00Z`)
-        .lte("start_time", `${endStr}T23:59:59Z`)
-        .order("start_time")
-        .then((r) => r.data as Appointment[] ?? []),
+      query.order("start_time").then((r) => r.data as Appointment[] ?? []),
       supabase.from("dentists").select("*").order("name").then((r) => r.data ?? []),
       supabase.from("patients").select("*").order("name").then((r) => r.data ?? []),
       supabase.from("procedures").select("*").order("name").then((r) => r.data ?? []),
@@ -812,7 +850,7 @@ export function AgendaClient() {
     setPatients(patientsData)
     setProcedures(proceduresData)
     setLoading(false)
-  }, [])
+  }, [userRole, currentDentistId])
 
   const getVisibleRange = useCallback((date: Date, v: string) => {
     if (v === "month") {
@@ -836,9 +874,11 @@ export function AgendaClient() {
   }, [currentDate, view, fetchRange, getVisibleRange])
 
   useEffect(() => {
+    if (!isReady) return
     setLoading(true)
-    refreshData()
-  }, [refreshData])
+    const range = getVisibleRange(currentDate, view)
+    fetchRange(range.start, range.end)
+  }, [currentDate, view, isReady, fetchRange, getVisibleRange])
 
   const events = useMemo(() => {
     const eventList = selectedDentist === "all"
@@ -1066,17 +1106,24 @@ export function AgendaClient() {
           </Button>
           <span className="ml-2 text-sm font-medium capitalize" suppressHydrationWarning>{dateDisplay}</span>
 
-          <Select value={selectedDentist} onValueChange={(v) => setSelectedDentist(v ?? "all")} itemToStringLabel={(value) => value === "all" ? "Todos os dentistas" : dentists.find((d) => d.id === value)?.name ?? String(value)}>
-            <SelectTrigger className="ml-auto h-8 w-44">
-              <SelectValue placeholder="Todos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os dentistas</SelectItem>
-              {dentists.map((d) => (
-                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {userRole === "dentist" && currentDentistId ? (
+            <div className="ml-auto flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-1.5 text-xs font-medium text-muted-foreground">
+              <CalendarDays className="h-3.5 w-3.5" />
+              {dentists.find((d) => d.id === currentDentistId)?.name ?? "Minha Agenda"}
+            </div>
+          ) : (
+            <Select value={selectedDentist} onValueChange={(v) => setSelectedDentist(v ?? "all")} itemToStringLabel={(value) => value === "all" ? "Todos os dentistas" : dentists.find((d) => d.id === value)?.name ?? String(value)}>
+              <SelectTrigger className="ml-auto h-8 w-44">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os dentistas</SelectItem>
+                {dentists.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         {loading ? (
@@ -1109,6 +1156,7 @@ export function AgendaClient() {
               onView={handleViewChange}
               selectable
               resizable
+              showAllEvents
               draggableAccessor={() => true}
               resizableAccessor={() => true}
               onSelectSlot={handleSelectSlot}
@@ -1121,7 +1169,7 @@ export function AgendaClient() {
               timeslots={4}
               scrollToTime={new Date(0, 0, 0, 8, 0, 0)}
               className="rounded-xl border bg-card"
-              style={{ height: 750 }}
+              style={{ height: 900 }}
               messages={{
                 today: "Hoje",
                 previous: "Anterior",
@@ -1149,13 +1197,16 @@ export function AgendaClient() {
               }}
               components={{
                 event: ({ event }) => (
-                  <div className="overflow-hidden p-0.5">
-                    <div className="truncate text-xs font-medium leading-tight">
-                      {event.appointment.patients?.name}
-                    </div>
-                    <div className="truncate text-[10px] text-muted-foreground">
+                  <div className="truncate px-0.5 text-[11px] leading-tight">
+                    <span className="font-medium">{event.appointment.patients?.name}</span>
+                    <span className="ml-1 text-muted-foreground">
                       {format(new Date(event.start), "HH:mm")}
-                    </div>
+                    </span>
+                  </div>
+                ),
+                showMore: ({ count }) => (
+                  <div className="cursor-pointer px-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors">
+                    +{count} mais
                   </div>
                 ),
               }}
@@ -1177,12 +1228,22 @@ export function AgendaClient() {
           procedures={procedures}
           onSave={handleSave}
           onDelete={handleDelete}
+          onCreateReturn={(appt) => {
+            setEditAppointment(null)
+            setReturnToId(appt.id)
+            setClickedDate(toDateInput(new Date(appt.start_time)))
+            setClickedHour(new Date(appt.start_time).getHours())
+            setDialogOpen(false)
+            setTimeout(() => setDialogOpen(true), 0)
+          }}
           createdPatientId={createdPatientId}
           onPatientCreated={({ id, name }) => {
             setPatients((prev) => [...prev, { id, name, cpf: null, phone: null, birth_date: null, notes: null, active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as Patient])
             setCreatedPatientId(id)
           }}
           returnToId={returnToId}
+          userRole={userRole}
+          currentDentistId={currentDentistId}
         />
 
         <ReturnDialog
@@ -1201,7 +1262,7 @@ export function AgendaClient() {
         />
       </div>
 
-      <aside className={cn("hidden shrink-0 transition-all duration-200 md:block", sidebarCollapsed ? "w-12" : "w-64")}>
+      <aside className={cn("hidden shrink-0 transition-all duration-300 md:block", sidebarCollapsed ? "w-12" : "w-64")}>
         {sidebarCollapsed ? (
           <div className="flex flex-col items-center gap-4 rounded-xl border bg-card py-3">
             <button

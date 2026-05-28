@@ -2,7 +2,7 @@
 
 import { requireAuth, AuthError } from "@/lib/supabase/guard"
 import { revalidatePath } from "next/cache"
-import { anamneseSessionSchema } from "@/lib/schemas"
+import { anamneseSessionSchema, anamneseSessionUpdateSchema } from "@/lib/schemas"
 import { ok, err } from "@/lib/utils/action-response"
 import { z } from "zod"
 
@@ -131,6 +131,40 @@ export async function saveAnamneseSession(formData: FormData) {
   return ok()
 }
 
+export async function updateAnamneseSession(formData: FormData) {
+  const { supabase } = await requireAuth()
+
+  const raw = Object.fromEntries(formData)
+  const parsed = anamneseSessionUpdateSchema.safeParse(raw)
+  if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
+
+  const { error } = await supabase
+    .from("anamnese_sessions")
+    .update({
+      ...(parsed.data.title !== undefined && { title: parsed.data.title }),
+      ...(parsed.data.fields !== undefined && { fields: parsed.data.fields }),
+      ...(parsed.data.notes !== undefined && { notes: parsed.data.notes }),
+    })
+    .eq("id", parsed.data.id)
+
+  if (error) return err(error.message)
+  revalidatePath("/anamnese")
+  return ok()
+}
+
+export async function deleteAnamneseSession(sessionId: string) {
+  const { supabase } = await requireAuth()
+
+  const { error } = await supabase
+    .from("anamnese_sessions")
+    .delete()
+    .eq("id", sessionId)
+
+  if (error) return err(error.message)
+  revalidatePath("/anamnese")
+  return ok()
+}
+
 export async function searchPatients(query: string) {
   try {
     const { supabase } = await requireAuth()
@@ -145,6 +179,34 @@ export async function searchPatients(query: string) {
     return data ?? []
   } catch {
     return []
+  }
+}
+
+export async function getAnamneseForExport(sessionId: string) {
+  try {
+    const { supabase } = await requireAuth()
+
+    const { data: session } = await supabase
+      .from("anamnese_sessions")
+      .select("*, patients(name, phone), dentists(name)")
+      .eq("id", sessionId)
+      .single()
+
+    if (!session) return err("Sessão não encontrada")
+
+    const patient = session.patients as { name: string; phone: string | null } | null
+    const dentist = session.dentists as { name: string } | null
+
+    return ok({
+      patientName: patient?.name ?? "Paciente",
+      patientPhone: patient?.phone ?? null,
+      dentistName: dentist?.name ?? "Dentista",
+      sessionTitle: session.title ?? "Sessão de Anamnese",
+      createdAt: session.created_at,
+      fields: session.fields as { label: string; content: string }[],
+    })
+  } catch {
+    return err("Erro ao buscar dados da sessão")
   }
 }
 
