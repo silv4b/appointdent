@@ -17,6 +17,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "AppointDent",
   description: "Agendamento odontológico inteligente",
+  icons: {
+    icon: ["/assets/tooth-icon.ico", "/assets/tooth-icon.png"],
+    apple: "/assets/tooth-icon.png",
+  },
 }
 
 export default function RootLayout({

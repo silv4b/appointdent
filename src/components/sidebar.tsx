@@ -8,12 +8,10 @@ import { createClient } from "@/lib/supabase/client"
 import {
   BookOpen,
   Calendar,
-  ChevronLeft,
-  ChevronsLeft,
-  ChevronsRight,
   Clock,
   LayoutDashboard,
   LogOut,
+  Shield,
   Stethoscope,
   Syringe,
   Users,
@@ -22,6 +20,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import Image from "next/image"
 
 type NavItem = {
   href: string
@@ -63,8 +62,9 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
   useEffect(() => {
     if (!user) return
     const supabase = createClient()
-    supabase.from("profiles").select("role").eq("id", user.id).single().then(({ data }) => {
+    supabase.from("profiles").select("role").eq("id", user.id).single().then(({ data, error }) => {
       if (data) setRole(data.role)
+      else console.error("Erro ao carregar perfil:", error?.message)
     })
   }, [user])
 
@@ -103,6 +103,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       label: "Configurações",
       items: [
         { href: "/horarios", label: "Grade de Horários", icon: Clock as typeof LayoutDashboard },
+        { href: "/admin/usuarios", label: "Usuários", icon: Shield as typeof LayoutDashboard },
       ],
     }] as NavSection[]),
   ]
@@ -134,7 +135,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
     <>
       <div className="flex h-16 shrink-0 items-center gap-3 border-b border-sidebar-border px-4">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary">
-          <Syringe className="h-4 w-4 text-sidebar-primary-foreground" />
+          <Image src="/assets/tooth-icon.png" alt="Ícone" width={24} height={24} style={{ width: "auto", height: "auto" }} />
         </div>
         <span className={cn(
           "truncate text-sm font-bold tracking-tight text-sidebar-foreground transition-all duration-300",
@@ -145,21 +146,31 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       </div>
 
       <nav className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
-        {navSections.map((section) => (
-          <div key={section.label}>
-            <div className={cn(
-              "px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 transition-all duration-300",
-              collapsed ? "h-0 opacity-0 overflow-hidden py-0" : "h-auto opacity-100",
-            )}>
-              {section.label}
-            </div>
-            <div className="space-y-0.5">
-              {section.items.map((item) => (
-                <NavItem key={item.href} {...item} />
-              ))}
-            </div>
+        {role === null ? (
+          <div className="space-y-2 px-3">
+            <div className={cn("h-3 w-20 animate-pulse rounded bg-sidebar-foreground/10", collapsed && "hidden")} />
+            <div className={cn("h-8 w-full animate-pulse rounded bg-sidebar-foreground/10", collapsed && "hidden")} />
+            <div className={cn("h-8 w-full animate-pulse rounded bg-sidebar-foreground/10", collapsed && "hidden")} />
+            <div className={cn("mt-6 h-3 w-16 animate-pulse rounded bg-sidebar-foreground/10", collapsed && "hidden")} />
+            <div className={cn("h-8 w-full animate-pulse rounded bg-sidebar-foreground/10", collapsed && "hidden")} />
           </div>
-        ))}
+        ) : (
+          navSections.map((section) => (
+            <div key={section.label}>
+              <div className={cn(
+                "px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 transition-all duration-300",
+                collapsed ? "h-0 opacity-0 overflow-hidden py-0" : "h-auto opacity-100",
+              )}>
+                {section.label}
+              </div>
+              <div className="space-y-0.5">
+                {section.items.map((item) => (
+                  <NavItem key={item.href} {...item} />
+                ))}
+              </div>
+            </div>
+          ))
+        )}
       </nav>
 
       <div className="border-t border-sidebar-border p-3">
