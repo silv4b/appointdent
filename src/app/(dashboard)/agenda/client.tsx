@@ -396,6 +396,7 @@ function AppointmentDialog({
   dentists,
   patients,
   procedures,
+  dentistProcedureMap,
   onSave,
   onDelete,
   onCreateReturn,
@@ -413,6 +414,7 @@ function AppointmentDialog({
   dentists: Dentist[]
   patients: Patient[]
   procedures: Procedure[]
+  dentistProcedureMap: Record<string, string[]>
   onSave: (formData: FormData) => Promise<{ error?: string } | null | undefined>
   onDelete?: (id: string) => void
   onCreateReturn?: (appointment: Appointment) => void
@@ -425,6 +427,7 @@ function AppointmentDialog({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedProcedure, setSelectedProcedure] = useState(appointment?.procedure_id ?? "")
+  const [selectedDentistId, setSelectedDentistId] = useState(appointment?.dentist_id ?? "")
   const [quickPatientOpen, setQuickPatientOpen] = useState(false)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [patientSearch, setPatientSearch] = useState("")
@@ -442,23 +445,48 @@ function AppointmentDialog({
     }
   }, [open])
 
-  const defaultStart = appointment
+  const initStart = appointment
     ? toDateTimeLocal(new Date(appointment.start_time))
     : `${defaultDate}T${String(defaultHour).padStart(2, "0")}:00`
 
-  const getDefaultEnd = () => {
-    if (appointment) return toDateTimeLocal(new Date(appointment.end_time))
-    return `${defaultDate}T${String(defaultHour + 1).padStart(2, "0")}:00`
-  }
+  const initEnd = appointment
+    ? toDateTimeLocal(new Date(appointment.end_time))
+    : `${defaultDate}T${String(defaultHour + 1).padStart(2, "0")}:00`
+
+  const [startTime, setStartTime] = useState(initStart)
+  const [endTime, setEndTime] = useState(initEnd)
 
   useEffect(() => {
     setSelectedProcedure(appointment?.procedure_id ?? "")
-  }, [appointment])
+    setSelectedDentistId(appointment?.dentist_id ?? "")
+    setStartTime(initStart)
+    setEndTime(initEnd)
+  }, [appointment, defaultDate, defaultHour])
+
+  const effectiveDentistId = userRole === "dentist" && currentDentistId ? currentDentistId : selectedDentistId
+  const availableProcIds = effectiveDentistId ? (dentistProcedureMap[effectiveDentistId] ?? []) : null
+
+  useEffect(() => {
+    if (availableProcIds && selectedProcedure && !availableProcIds.includes(selectedProcedure)) {
+      setSelectedProcedure("")
+    }
+  }, [effectiveDentistId])
 
   const selectedProc = procedures.find((p) => p.id === selectedProcedure)
+
+  useEffect(() => {
+    if (!selectedProc) return
+    const start = new Date(startTime)
+    if (isNaN(start.getTime())) return
+    const end = new Date(start.getTime() + selectedProc.duration_minutes * 60000)
+    setEndTime(toDateTimeLocal(end))
+  }, [selectedProcedure, startTime])
   const filteredPatients = patients.filter((p) => p.name.toLowerCase().includes(patientSearch.toLowerCase()))
   const filteredDentists = dentists.filter((d) => d.name.toLowerCase().includes(dentistSearch.toLowerCase()))
-  const filteredProcedures = procedures.filter((p) => p.name.toLowerCase().includes(procedureSearch.toLowerCase()))
+  const filteredProcedures = procedures.filter((p) => {
+    if (availableProcIds && !availableProcIds.includes(p.id)) return false
+    return p.name.toLowerCase().includes(procedureSearch.toLowerCase())
+  })
 
   return (
     <Dialog open={open} onOpenChange={(v) => { setError(null); onOpenChange(v) }}>
@@ -548,6 +576,7 @@ function AppointmentDialog({
                   defaultValue={appointment?.dentist_id ?? ""}
                   required
                   itemToStringLabel={(value) => dentists.find((d) => d.id === value)?.name ?? String(value)}
+                  onValueChange={(v) => setSelectedDentistId(v ?? "")}
                   onOpenChangeComplete={(open) => {
                     if (open) setTimeout(() => dentistSearchRef.current?.focus(), 30)
                   }}
@@ -626,11 +655,24 @@ function AppointmentDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="start_time">Início</Label>
-              <Input id="start_time" name="start_time" type="datetime-local" defaultValue={defaultStart} required />
+              <Input
+                id="start_time"
+                name="start_time"
+                type="datetime-local"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                required
+              />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="end_time">Fim</Label>
-              <Input id="end_time" name="end_time" type="datetime-local" defaultValue={getDefaultEnd()} />
+              <Input
+                id="end_time"
+                name="end_time"
+                type="datetime-local"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+              />
               {selectedProc && (
                 <p className="text-xs text-muted-foreground">~{selectedProc.duration_minutes}min</p>
               )}
@@ -797,6 +839,7 @@ export function AgendaClient() {
   const [userRole, setUserRole] = useState<string | null>(null)
   const [currentDentistId, setCurrentDentistId] = useState<string | null>(null)
   const [isReady, setIsReady] = useState(false)
+  const [dentistProcedureMap, setDentistProcedureMap] = useState<Record<string, string[]>>({})
 
   useEffect(() => {
     const supabase = createClient()
@@ -838,17 +881,33 @@ export function AgendaClient() {
       query = query.eq("dentist_id", currentDentistId)
     }
 
-    const [appointmentsData, dentistsData, patientsData, proceduresData] = await Promise.all([
+    const [appointmentsData, dentistsData, patientsData, proceduresData, dentistProcsData, approvedReqsData] = await Promise.all([
       query.order("start_time").then((r) => r.data as Appointment[] ?? []),
       supabase.from("dentists").select("*").order("name").then((r) => r.data ?? []),
       supabase.from("patients").select("*").order("name").then((r) => r.data ?? []),
       supabase.from("procedures").select("*").order("name").then((r) => r.data ?? []),
+      supabase.from("dentist_procedures").select("dentist_id, procedure_id").eq("active", true),
+      supabase.from("procedure_requests").select("dentist_id, created_procedure_id").eq("status", "approved"),
     ])
 
     setAppointments(appointmentsData)
     setDentists(dentistsData)
     setPatients(patientsData)
     setProcedures(proceduresData)
+
+    const dpMap: Record<string, string[]> = {}
+    for (const d of dentistsData) dpMap[d.id] = []
+    for (const dp of (dentistProcsData.data ?? [])) {
+      if (!dpMap[dp.dentist_id]) dpMap[dp.dentist_id] = []
+      if (!dpMap[dp.dentist_id].includes(dp.procedure_id)) dpMap[dp.dentist_id].push(dp.procedure_id)
+    }
+    for (const req of (approvedReqsData.data ?? [])) {
+      if (req.created_procedure_id) {
+        if (!dpMap[req.dentist_id]) dpMap[req.dentist_id] = []
+        if (!dpMap[req.dentist_id].includes(req.created_procedure_id)) dpMap[req.dentist_id].push(req.created_procedure_id)
+      }
+    }
+    setDentistProcedureMap(dpMap)
     setLoading(false)
   }, [userRole, currentDentistId])
 
@@ -1226,6 +1285,7 @@ export function AgendaClient() {
           dentists={dentists}
           patients={patients}
           procedures={procedures}
+          dentistProcedureMap={dentistProcedureMap}
           onSave={handleSave}
           onDelete={handleDelete}
           onCreateReturn={(appt) => {
@@ -1262,7 +1322,7 @@ export function AgendaClient() {
         />
       </div>
 
-      <aside className={cn("hidden shrink-0 transition-all duration-300 md:block", sidebarCollapsed ? "w-12" : "w-64")}>
+      <aside className={cn("hidden shrink-0 transition-all duration-300 md:block", sidebarCollapsed ? "w-12" : "w-80")}>
         {sidebarCollapsed ? (
           <div className="flex flex-col items-center gap-4 rounded-xl border bg-card py-3">
             <button
@@ -1328,7 +1388,7 @@ export function AgendaClient() {
                   )}
                 </div>
                 {dayAppointments.current.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Nenhum evento no momento</p>
+                  <p className="text-xs text-muted-foreground py-4">Nenhum evento no momento</p>
                 ) : (
                   dayAppointments.current.map((a) => (
                     <div key={a.id} className="py-1.5">
@@ -1352,7 +1412,7 @@ export function AgendaClient() {
                 </div>
               )}
               {dayAppointments.past.length === 0 && dayAppointments.current.length === 0 && dayAppointments.future.length === 0 && (
-                <p className="text-xs text-muted-foreground">Nenhum agendamento para este dia</p>
+                <p className="text-xs text-muted-foreground py-4">Nenhum agendamento para este dia</p>
               )}
             </div>
           </div>

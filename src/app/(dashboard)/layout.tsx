@@ -13,7 +13,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Sidebar collapsed={collapsed} onToggleCollapse={() => setCollapsed(!collapsed)} />
       <div
         className="flex flex-col transition-all duration-300"
-        style={{ marginLeft: collapsed ? 64 : 260 }}
+        style={{ marginLeft: collapsed ? 64 : 230 }}
       >
         <DashboardHeader collapsed={collapsed} onToggleCollapse={() => setCollapsed(!collapsed)} />
         <main className="flex-1 p-4 sm:p-6">

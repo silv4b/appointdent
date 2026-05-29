@@ -227,11 +227,13 @@ export function MinhaAgendaClient() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Minha Agenda</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Todos os seus agendamentos organizados por período.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Todos os seus agendamentos organizados por período.
+        </p>
       </div>
 
       <div className="mb-4 flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
-        <div className="flex-1 min-w-[180px]">
+        <div className="flex-1 min-w-45">
           <label className="mb-1 block text-xs font-medium text-muted-foreground">Paciente</label>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -251,7 +253,7 @@ export function MinhaAgendaClient() {
             )}
           </div>
         </div>
-        <div className="flex-1 min-w-[180px]">
+        <div className="flex-1 min-w-45">
           <label className="mb-1 block text-xs font-medium text-muted-foreground">Procedimento</label>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -271,7 +273,7 @@ export function MinhaAgendaClient() {
             )}
           </div>
         </div>
-        <div className="w-[180px]">
+        <div className="w-45">
           <label className="mb-1 block text-xs font-medium text-muted-foreground">De</label>
           <Input
             type="date"
@@ -280,7 +282,7 @@ export function MinhaAgendaClient() {
             className="h-9"
           />
         </div>
-        <div className="w-[180px]">
+        <div className="w-45">
           <label className="mb-1 block text-xs font-medium text-muted-foreground">Até</label>
           <Input
             type="date"
@@ -289,7 +291,7 @@ export function MinhaAgendaClient() {
             className="h-9"
           />
         </div>
-        <div className="w-[180px]">
+        <div className="w-45">
           <label className="mb-1 block text-xs font-medium text-muted-foreground">Status</label>
           <Select
             value={statusFilter}

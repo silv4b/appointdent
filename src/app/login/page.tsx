@@ -22,7 +22,7 @@ export default function LoginPage() {
       <div className="flex w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-lg">
         <div className="flex flex-col items-center justify-center gap-4 bg-linear-to-br from-blue-600 to-blue-700 p-10 text-white">
           <div className="rounded-full bg-white/20 p-4">
-            <Image src="/assets/tooth-icon.png" alt="Ícone" width={48} height={48} style={{ width: "auto", height: "auto" }} />
+            <Image src="/assets/tooth-icon.png" alt="Ícone" width={48} height={48} />
           </div>
           <h1 className="text-3xl font-bold tracking-tight">AppointDent</h1>
           <p className="text-center text-blue-100">

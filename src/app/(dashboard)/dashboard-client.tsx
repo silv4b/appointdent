@@ -44,6 +44,8 @@ export function DashboardClient() {
   ])
   const [appointments, setAppointments] = useState<RecentAppointment[]>([])
   const [greeting, setGreeting] = useState("Bom dia")
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [dentistId, setDentistId] = useState<string | null>(null)
 
   useEffect(() => {
     const hour = new Date().getHours()
@@ -52,26 +54,53 @@ export function DashboardClient() {
     else setGreeting("Boa noite")
   }, [])
 
+  useEffect(() => {
+    if (!user) return
+    const supabase = createClient()
+    supabase.from("profiles").select("role").eq("id", user.id).single()
+      .then(async ({ data: profile }) => {
+        if (!profile) return
+        setUserRole(profile.role)
+        if (profile.role === "dentist") {
+          const { data: dentist } = await supabase
+            .from("dentists")
+            .select("id")
+            .eq("profile_id", user.id)
+            .single()
+          if (dentist) setDentistId(dentist.id)
+        }
+      })
+  }, [user])
+
   const fetchStats = useCallback(async () => {
     const supabase = createClient()
     const today = format(new Date(), "yyyy-MM-dd")
 
+    let apptsQuery = supabase
+      .from("appointments")
+      .select("*", { count: "exact", head: true })
+      .gte("start_time", `${today}T00:00:00Z`)
+      .lte("start_time", `${today}T23:59:59Z`)
+
+    let recentQuery = supabase
+      .from("appointments")
+      .select("*, patients(name), dentists(name), procedures(name, color)")
+      .gte("start_time", `${today}T00:00:00Z`)
+      .lte("start_time", `${today}T23:59:59Z`)
+      .order("start_time")
+      .limit(5)
+
+    if (dentistId) {
+      apptsQuery = apptsQuery.eq("dentist_id", dentistId)
+      recentQuery = recentQuery.eq("dentist_id", dentistId)
+    }
+
     const [apptsCount, patientsCount, dentistsCount, proceduresCount, appts] = await Promise.all([
-      supabase
-        .from("appointments")
-        .select("*", { count: "exact", head: true })
-        .gte("start_time", `${today}T00:00:00Z`)
-        .lte("start_time", `${today}T23:59:59Z`),
+      apptsQuery,
       supabase.from("patients").select("*", { count: "exact", head: true }).eq("active", true),
       supabase.from("dentists").select("*", { count: "exact", head: true }).eq("active", true),
       supabase.from("procedures").select("*", { count: "exact", head: true }).eq("active", true),
-      supabase
-        .from("appointments")
-        .select("*, patients(name), dentists(name), procedures(name, color)")
-        .gte("start_time", `${today}T00:00:00Z`)
-        .lte("start_time", `${today}T23:59:59Z`)
-        .order("start_time")
-        .limit(5),
+      recentQuery,
     ])
 
     setStats([
@@ -81,11 +110,13 @@ export function DashboardClient() {
       { label: "Procedimentos", value: String(proceduresCount.count ?? 0), change: "", trend: "up", icon: Syringe, chartColor: "chart-4" },
     ])
     setAppointments(appts.data as RecentAppointment[] ?? [])
-  }, [])
+  }, [dentistId])
 
   useEffect(() => {
-    fetchStats()
-  }, [fetchStats])
+    if (user && (userRole !== "dentist" || dentistId)) {
+      fetchStats()
+    }
+  }, [fetchStats, user, userRole, dentistId])
 
   const userName = user?.user_metadata?.name as string | undefined
 
@@ -275,12 +306,17 @@ export function DashboardClient() {
             </h3>
           </div>
           <div className="space-y-1 px-4 pb-5">
-            {[
+            {(userRole === "dentist" ? [
+              { href: "/minha-agenda", label: "Minha Agenda", desc: "Meus agendamentos" },
+              { href: "/agenda", label: "Agenda Geral", desc: "Todos os agendamentos" },
+              { href: "/meus-procedimentos", label: "Meus Procedimentos", desc: "Personalizar preços" },
+              { href: "/pacientes", label: "Ver Pacientes", desc: "Lista de pacientes" },
+            ] : [
               { href: "/agenda", label: "Ver Agenda do Dia", desc: "Agendamentos de hoje" },
               { href: "/pacientes", label: "Cadastrar Paciente", desc: "Novo paciente" },
               { href: "/dentistas", label: "Gerenciar Dentistas", desc: "Profissionais" },
               { href: "/horarios", label: "Grade de Horários", desc: "Disponibilidade" },
-            ].map((item) => (
+            ]).map((item) => (
               <Link
                 key={item.href}
                 href={item.href}

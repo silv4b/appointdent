@@ -53,10 +53,12 @@ function SlotDialog({
   onSave: (formData: FormData) => Promise<{ error?: string } | null | undefined>
 }) {
   const [dayOfWeek, setDayOfWeek] = useState(slot?.day_of_week?.toString() ?? "1")
+  const [slotType, setSlotType] = useState(slot?.slot_type ?? "available")
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setDayOfWeek(slot?.day_of_week?.toString() ?? "1")
+    setSlotType(slot?.slot_type ?? "available")
   }, [slot])
 
   return (
@@ -103,6 +105,19 @@ function SlotDialog({
                     {name}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="slot_type">Tipo</Label>
+            <Select name="slot_type" value={slotType} onValueChange={(v) => setSlotType(v ?? "available")}>
+              <SelectTrigger id="slot_type">
+                <SelectValue placeholder="Selecione o tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="available">Atendimento</SelectItem>
+                <SelectItem value="blocked">Bloqueado</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -203,7 +218,7 @@ export function HorariosClient() {
     .filter((g) => g.slots.length > 0)
 
   const toggleExpanded = (id: string) => {
-    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }))
+    setExpanded((prev) => ({ ...prev, [id]: !(prev[id] ?? true) }))
   }
 
   const dentistsWithoutSlots = dentists.filter(
@@ -230,13 +245,13 @@ export function HorariosClient() {
           {grouped.map(({ dentist, slots: dentistSlots }) => {
             const isExpanded = expanded[dentist.id] ?? true
             return (
-              <div key={dentist.id} className="rounded-2xl border bg-card shadow-md">
+              <div key={dentist.id} className={`rounded-2xl border bg-card transition-shadow ${isExpanded ? "shadow-md" : "shadow-sm"}`}>
                 <div
                   role="button"
                   tabIndex={0}
                   onClick={() => toggleExpanded(dentist.id)}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleExpanded(dentist.id) } }}
-                  className="flex w-full cursor-pointer items-center justify-between border-b px-6 py-4 text-left transition-colors hover:bg-muted/20"
+                  className={`flex w-full cursor-pointer items-center justify-between px-6 py-4 text-left transition-colors hover:bg-muted/20 ${isExpanded ? "border-b" : ""}`}
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
@@ -276,6 +291,9 @@ export function HorariosClient() {
                           <span className="text-sm font-medium">
                             {s.start_time.slice(0, 5)} - {s.end_time.slice(0, 5)}
                           </span>
+                          <Badge variant={s.slot_type === "blocked" ? "secondary" : "outline"} className="text-xs">
+                            {s.slot_type === "blocked" ? "Bloqueado" : "Atendimento"}
+                          </Badge>
                         </div>
                         <div className="flex gap-1">
                           <Button
