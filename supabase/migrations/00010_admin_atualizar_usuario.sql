@@ -8,7 +8,8 @@ CREATE OR REPLACE FUNCTION public.atualizar_usuario(
   usuario_nome TEXT DEFAULT NULL,
   usuario_role TEXT DEFAULT NULL,
   nova_senha TEXT DEFAULT NULL,
-  especialidade TEXT DEFAULT NULL
+  especialidade TEXT DEFAULT NULL,
+  novo_email TEXT DEFAULT NULL
 ) RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -50,6 +51,13 @@ BEGIN
         VALUES (usuario_id, COALESCE(usuario_nome, (SELECT name FROM public.profiles WHERE id = usuario_id)), especialidade, true);
       END IF;
     END IF;
+  END IF;
+
+  IF novo_email IS NOT NULL AND novo_email <> (SELECT email FROM auth.users WHERE id = usuario_id) THEN
+    IF EXISTS (SELECT 1 FROM auth.users WHERE email = novo_email AND id <> usuario_id) THEN
+      RAISE EXCEPTION 'Email já está em uso por outro usuário';
+    END IF;
+    UPDATE auth.users SET email = novo_email WHERE id = usuario_id;
   END IF;
 
   IF nova_senha IS NOT NULL THEN

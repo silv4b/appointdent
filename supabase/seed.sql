@@ -187,3 +187,35 @@ BEGIN
     END LOOP;
   END LOOP;
 END $$;
+
+-- 8. SOLICITAÇÕES DE PROCEDIMENTOS (procedure_requests)
+DO $$
+DECLARE
+  v_dent2 UUID; v_dent3 UUID; v_dent4 UUID; v_dent5 UUID;
+  v_admin UUID;
+BEGIN
+  SELECT id INTO v_dent2 FROM dentists WHERE name = 'Dra. Ana Costa';
+  SELECT id INTO v_dent3 FROM dentists WHERE name = 'Dr. Pedro Oliveira';
+  SELECT id INTO v_dent4 FROM dentists WHERE name = 'Dra. Mariana Santos';
+  SELECT id INTO v_dent5 FROM dentists WHERE name = 'Dr. Lucas Mendes';
+  SELECT id INTO v_admin FROM auth.users WHERE email = 'admin@odonto.com';
+
+  -- Pendentes (3)
+  INSERT INTO procedure_requests (dentist_id, name, description, duration_minutes, price, status)
+  VALUES
+    (v_dent2, 'Lente de Contato Dental', 'Aplicação de lentes de porcelana para correção estética', 90, 1800.00, 'pending'),
+    (v_dent3, 'Bichectomia', 'Remoção cirúrgica das bolsas de Bichat', 60, 2500.00, 'pending'),
+    (v_dent5, 'Toxina Botulínica (Botox)', 'Aplicação de toxina botulínica para fins terapêuticos e estéticos', 30, 800.00, 'pending');
+
+  -- Aprovadas (2)
+  INSERT INTO procedure_requests (dentist_id, name, description, duration_minutes, price, status, admin_id, reviewed_at)
+  VALUES
+    (v_dent4, 'Odontopediatria - Selante', 'Aplicação de selante em dentes infantis', 40, 120.00, 'approved', v_admin, now() - interval '5 days'),
+    (v_dent3, 'Enxerto Ósseo', 'Enxerto ósseo para preparação de implante', 90, 2000.00, 'approved', v_admin, now() - interval '2 days');
+
+  -- Rejeitadas (2)
+  INSERT INTO procedure_requests (dentist_id, name, description, duration_minutes, price, status, admin_id, reviewed_at, rejection_reason)
+  VALUES
+    (v_dent2, 'Harmonização Facial', 'Procedimento estético facial completo', 120, 3500.00, 'rejected', v_admin, now() - interval '7 days', 'Fora do escopo de atendimento da clínica'),
+    (v_dent5, 'Tratamento com Plasma Rico em Plaquetas', 'Aplicação de PRP para regeneração periodontal', 60, 1200.00, 'rejected', v_admin, now() - interval '3 days', 'Equipamento necessário não disponível');
+END $$;

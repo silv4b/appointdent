@@ -170,6 +170,7 @@ export type Database = {
           dentist_id: string
           end_time: string
           id: string
+          slot_type: string
           start_time: string
           updated_at: string
         }
@@ -179,6 +180,7 @@ export type Database = {
           dentist_id: string
           end_time: string
           id?: string
+          slot_type?: string
           start_time: string
           updated_at?: string
         }
@@ -188,6 +190,7 @@ export type Database = {
           dentist_id?: string
           end_time?: string
           id?: string
+          slot_type?: string
           start_time?: string
           updated_at?: string
         }
@@ -232,6 +235,89 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "blocked_slots_dentist_id_fkey"
+            columns: ["dentist_id"]
+            isOneToOne: false
+            referencedRelation: "dentists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dentist_procedures: {
+        Row: {
+          active: boolean
+          created_at: string
+          dentist_id: string
+          duration_minutes: number | null
+          id: string
+          price: number | null
+          procedure_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          dentist_id: string
+          duration_minutes?: number | null
+          id?: string
+          price?: number | null
+          procedure_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          dentist_id?: string
+          duration_minutes?: number | null
+          id?: string
+          price?: number | null
+          procedure_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dentist_procedures_dentist_id_fkey"
+            columns: ["dentist_id"]
+            isOneToOne: false
+            referencedRelation: "dentists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dentist_procedures_procedure_id_fkey"
+            columns: ["procedure_id"]
+            isOneToOne: false
+            referencedRelation: "procedures"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      anamnesis_templates: {
+        Row: {
+          id: string
+          dentist_id: string
+          name: string
+          fields: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          dentist_id: string
+          name: string
+          fields?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          dentist_id?: string
+          name?: string
+          fields?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "anamnesis_templates_dentist_id_fkey"
             columns: ["dentist_id"]
             isOneToOne: false
             referencedRelation: "dentists"
@@ -354,6 +440,62 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      procedure_requests: {
+        Row: {
+          admin_id: string | null
+          created_at: string
+          dentist_id: string
+          description: string | null
+          duration_minutes: number
+          id: string
+          name: string
+          price: number | null
+          rejection_reason: string | null
+          reviewed_at: string | null
+          status: string
+          updated_at: string
+          created_procedure_id: string | null
+        }
+        Insert: {
+          admin_id?: string | null
+          created_at?: string
+          dentist_id: string
+          description?: string | null
+          duration_minutes: number
+          id?: string
+          name: string
+          price?: number | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          status?: string
+          updated_at?: string
+          created_procedure_id?: string | null
+        }
+        Update: {
+          admin_id?: string | null
+          created_at?: string
+          dentist_id?: string
+          description?: string | null
+          duration_minutes?: number
+          id?: string
+          name?: string
+          price?: number | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          status?: string
+          updated_at?: string
+          created_procedure_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "procedure_requests_dentist_id_fkey"
+            columns: ["dentist_id"]
+            isOneToOne: false
+            referencedRelation: "dentists"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
