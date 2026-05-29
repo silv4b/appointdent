@@ -102,6 +102,7 @@ export async function updateUser(formData: FormData) {
     const parsed = z.object({
       userId: z.string().uuid(),
       name: z.string().min(1).max(200),
+      email: z.string().email("Email inválido"),
       role: z.enum(["admin", "dentist", "receptionist"]),
       specialty: z.string().optional().nullable(),
       password: z.string().optional().nullable(),
@@ -122,6 +123,7 @@ export async function updateUser(formData: FormData) {
       usuario_role: parsed.data.role,
       nova_senha: parsed.data.password || null,
       especialidade: parsed.data.specialty || null,
+      novo_email: parsed.data.email,
     })
 
     if (error) return err(error.message)

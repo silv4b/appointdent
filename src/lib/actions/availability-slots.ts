@@ -32,6 +32,7 @@ export async function createAvailabilitySlot(formData: FormData) {
     day_of_week: parsed.data.day_of_week,
     start_time: parsed.data.start_time,
     end_time: parsed.data.end_time,
+    slot_type: parsed.data.slot_type,
   })
 
   if (error) return err(error.message)
@@ -54,6 +55,7 @@ export async function updateAvailabilitySlot(formData: FormData) {
       day_of_week: fields.day_of_week,
       start_time: fields.start_time,
       end_time: fields.end_time,
+      slot_type: fields.slot_type,
     })
     .eq("id", id)
 

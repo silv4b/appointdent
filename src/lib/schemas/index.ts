@@ -51,6 +51,7 @@ export const availabilitySlotSchema = z.object({
   day_of_week: z.coerce.number().int().min(0).max(6),
   start_time: z.string().min(1, "Início é obrigatório"),
   end_time: z.string().min(1, "Fim é obrigatório"),
+  slot_type: z.enum(["available", "blocked"]).optional().default("available"),
 })
 
 export const loginSchema = z.object({
@@ -127,5 +128,22 @@ export const anamneseSessionUpdateSchema = anamneseSessionSchema.extend({
   patient_id: z.string().uuid("Paciente inválido").optional(),
 })
 
+export const dentistProcedureSchema = z.object({
+  dentist_id: z.string().uuid("Dentista inválido"),
+  procedure_id: z.string().uuid("Procedimento inválido"),
+  price: z.coerce.number().min(0).nullable().optional(),
+  duration_minutes: z.coerce.number().int().min(1).nullable().optional(),
+  active: z.preprocess((v) => v === "on" || v === true, z.boolean()).optional().default(true),
+})
+
+export const procedureRequestSchema = z.object({
+  dentist_id: z.string().uuid("Dentista inválido"),
+  name: z.string().min(1, "Nome é obrigatório"),
+  description: z.string().optional(),
+  duration_minutes: z.coerce.number().int().min(1, "Duração deve ser no mínimo 1 minuto"),
+  price: z.coerce.number().min(0).nullable().optional(),
+})
+
 export type AppointmentInput = z.infer<typeof appointmentSchema>
 export type AvailabilitySlotInput = z.infer<typeof availabilitySlotSchema>
+export type DentistProcedureInput = z.infer<typeof dentistProcedureSchema>

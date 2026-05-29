@@ -73,6 +73,32 @@ async function checkOverlap(
   return null
 }
 
+async function checkBlockedSlot(
+  supabase: Awaited<ReturnType<typeof import("@/lib/supabase/guard").requireAuth>>["supabase"],
+  dentistId: string,
+  startTime: string,
+  endTime: string,
+) {
+  const date = new Date(startTime)
+  const dayOfWeek = date.getUTCDay()
+
+  const { data } = await supabase
+    .from("availability_slots")
+    .select("start_time, end_time")
+    .eq("dentist_id", dentistId)
+    .eq("day_of_week", dayOfWeek)
+    .eq("slot_type", "blocked")
+    .lt("start_time", endTime)
+    .gt("end_time", startTime)
+
+  if (data && data.length > 0) {
+    const block = data[0]
+    return `Horário bloqueado: o dentista possui um bloqueio das ${block.start_time.slice(0, 5)} às ${block.end_time.slice(0, 5)} neste dia`
+  }
+
+  return null
+}
+
 export async function searchAppointmentsForReturn(params: {
   patient_id?: string
   dentist_id?: string
@@ -115,15 +141,29 @@ export async function createAppointment(formData: FormData) {
   if (endTimeLocal) {
     endTime = new Date(endTimeLocal).toISOString()
   } else if (procedure_id) {
-    const { data: procedure } = await supabase
-      .from("procedures")
+    let durationMinutes: number | null = null
+
+    const { data: dentistProc } = await supabase
+      .from("dentist_procedures")
       .select("duration_minutes")
-      .eq("id", procedure_id)
+      .eq("dentist_id", dentist_id)
+      .eq("procedure_id", procedure_id)
       .single()
 
-    if (procedure) {
+    if (dentistProc?.duration_minutes) {
+      durationMinutes = dentistProc.duration_minutes
+    } else {
+      const { data: procedure } = await supabase
+        .from("procedures")
+        .select("duration_minutes")
+        .eq("id", procedure_id)
+        .single()
+      durationMinutes = procedure?.duration_minutes ?? null
+    }
+
+    if (durationMinutes) {
       const start = new Date(startTimeLocal)
-      endTime = new Date(start.getTime() + procedure.duration_minutes * 60000).toISOString()
+      endTime = new Date(start.getTime() + durationMinutes * 60000).toISOString()
     } else {
       endTime = startTime
     }
@@ -133,6 +173,9 @@ export async function createAppointment(formData: FormData) {
 
   const conflict = await checkOverlap(supabase, dentist_id, startTime, endTime)
   if (conflict) return err(conflict)
+
+  const blocked = await checkBlockedSlot(supabase, dentist_id, startTime, endTime)
+  if (blocked) return err(blocked)
 
   const { error } = await supabase.from("appointments").insert({
     patient_id,
@@ -164,6 +207,9 @@ export async function updateAppointment(formData: FormData) {
 
   const conflict = await checkOverlap(supabase, dentist_id, startTime, endTime, id)
   if (conflict) return err(conflict)
+
+  const blocked = await checkBlockedSlot(supabase, dentist_id, startTime, endTime)
+  if (blocked) return err(blocked)
 
   const { error } = await supabase
     .from("appointments")

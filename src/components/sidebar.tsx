@@ -5,10 +5,21 @@ import { logout } from "@/lib/supabase/actions"
 import { cn } from "@/lib/utils"
 import { useSupabase } from "@/components/providers/supabase-provider"
 import { createClient } from "@/lib/supabase/client"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   BookOpen,
   Calendar,
+  ClipboardList,
   Clock,
+  FileText,
   LayoutDashboard,
   LogOut,
   Shield,
@@ -58,13 +69,19 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
   const { user } = useSupabase()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [role, setRole] = useState<string | null>(null)
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
 
   useEffect(() => {
-    if (!user) return
     const supabase = createClient()
-    supabase.from("profiles").select("role").eq("id", user.id).single().then(({ data, error }) => {
-      if (data) setRole(data.role)
-      else console.error("Erro ao carregar perfil:", error?.message)
+    supabase.auth.getUser().then(({ data: { user: currentUser } }) => {
+      if (!currentUser) {
+        setRole(null)
+        return
+      }
+      supabase.from("profiles").select("role").eq("id", currentUser.id).single().then(({ data, error }) => {
+        if (data) setRole(data.role)
+        else console.error("Erro ao carregar perfil:", error?.message)
+      })
     })
   }, [user])
 
@@ -78,9 +95,10 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
     {
       label: "Principal",
       items: [
+        { href: "/", label: "Dashboard", icon: LayoutDashboard as typeof LayoutDashboard },
         ...(isDentist
           ? [{ href: "/minha-agenda", label: "Minha Agenda", icon: Calendar as typeof LayoutDashboard }]
-          : [{ href: "/", label: "Dashboard", icon: LayoutDashboard as typeof LayoutDashboard }]
+          : []
         ),
         { href: "/agenda", label: "Agenda Geral", icon: Calendar as typeof LayoutDashboard },
       ],
@@ -89,6 +107,10 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       label: "Clínico",
       items: [
         { href: "/anamnese", label: "Anamnese", icon: BookOpen as typeof LayoutDashboard },
+        ...(isDentist ? [
+          { href: "/minhas-anamneses", label: "Minhas Anamneses", icon: FileText as typeof LayoutDashboard },
+          { href: "/meus-procedimentos", label: "Meus Procedimentos", icon: Syringe as typeof LayoutDashboard },
+        ] : []),
       ],
     },
     ...(isDentist ? [] : [{
@@ -104,6 +126,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       items: [
         { href: "/horarios", label: "Grade de Horários", icon: Clock as typeof LayoutDashboard },
         { href: "/admin/usuarios", label: "Usuários", icon: Shield as typeof LayoutDashboard },
+        { href: "/admin/solicitacoes", label: "Solicitações", icon: ClipboardList as typeof LayoutDashboard },
       ],
     }] as NavSection[]),
   ]
@@ -135,7 +158,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
     <>
       <div className="flex h-16 shrink-0 items-center gap-3 border-b border-sidebar-border px-4">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary">
-          <Image src="/assets/tooth-icon.png" alt="Ícone" width={24} height={24} style={{ width: "auto", height: "auto" }} />
+          <Image src="/assets/tooth-icon.png" alt="Ícone" width={24} height={24} />
         </div>
         <span className={cn(
           "truncate text-sm font-bold tracking-tight text-sidebar-foreground transition-all duration-300",
@@ -145,7 +168,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
         </span>
       </div>
 
-      <nav className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
+      <nav className="flex-1 space-y-3 overflow-y-auto px-2 py-4">
         {role === null ? (
           <div className="space-y-2 px-3">
             <div className={cn("h-3 w-20 animate-pulse rounded bg-sidebar-foreground/10", collapsed && "hidden")} />
@@ -174,7 +197,11 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       </nav>
 
       <div className="border-t border-sidebar-border p-3">
-        <div className="flex items-center gap-3">
+        <Link
+          href="/perfil"
+          onClick={() => setMobileOpen(false)}
+          className="flex items-center gap-3 rounded-lg transition-colors hover:bg-sidebar-accent/50"
+        >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-xs font-medium text-sidebar-primary-foreground">
             {initials}
           </div>
@@ -191,20 +218,38 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
               </p>
             )}
           </div>
-        </div>
-        <form action={logout} className="mt-2">
-          <button
-            type="submit"
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-          >
-            <LogOut className="h-4 w-4 shrink-0" />
-            <span className={cn(
-              "transition-all duration-300 truncate",
-              collapsed ? "w-0 opacity-0 overflow-hidden" : "w-auto opacity-100",
-            )}>Sair</span>
-          </button>
-        </form>
+        </Link>
+        <button
+          type="button"
+          onClick={() => setLogoutConfirmOpen(true)}
+          className="mt-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+        >
+          <LogOut className="h-4 w-4 shrink-0" />
+          <span className={cn(
+            "transition-all duration-300 truncate",
+            collapsed ? "w-0 opacity-0 overflow-hidden" : "w-auto opacity-100",
+          )}>Sair</span>
+        </button>
       </div>
+
+      <Dialog open={logoutConfirmOpen} onOpenChange={setLogoutConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Sair</DialogTitle>
+            <DialogDescription>Tem certeza que deseja sair do sistema?</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLogoutConfirmOpen(false)}>
+              Cancelar
+            </Button>
+            <form action={logout}>
+              <Button type="submit" variant="destructive" onClick={() => setLogoutConfirmOpen(false)}>
+                Sair
+              </Button>
+            </form>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 
@@ -228,8 +273,8 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
 
       <aside
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-full flex-col bg-sidebar transition-all duration-300",
-          collapsed ? "w-16" : "w-[260px]",
+          "fixed left-0 top-0 z-50 flex h-full flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300",
+          collapsed ? "w-16" : "w-[230px]",
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
       >
@@ -268,7 +313,11 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
               ))}
             </nav>
             <div className="border-t border-sidebar-border p-3">
-              <div className="flex items-center gap-3">
+              <Link
+                href="/perfil"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-3 rounded-lg transition-colors hover:bg-sidebar-accent/50"
+              >
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-xs font-medium text-sidebar-primary-foreground">
                   {initials}
                 </div>
@@ -280,16 +329,15 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
                     <p className="truncate text-xs text-sidebar-foreground/60">{userEmail}</p>
                   )}
                 </div>
-              </div>
-              <form action={logout} className="mt-2">
-                <button
-                  type="submit"
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Sair
-                </button>
-              </form>
+              </Link>
+              <button
+                type="button"
+                onClick={() => { setMobileOpen(false); setLogoutConfirmOpen(true) }}
+                className="mt-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              >
+                <LogOut className="h-4 w-4" />
+                Sair
+              </button>
             </div>
           </>
         ) : (
