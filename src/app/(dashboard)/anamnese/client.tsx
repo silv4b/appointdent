@@ -250,7 +250,7 @@ export function AnamneseSearchClient() {
                   <TableCell>
                     <Link
                       href={`/anamnese/${p.id}`}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                     >
                       <FileText className="h-3.5 w-3.5" />
                       Anamnese

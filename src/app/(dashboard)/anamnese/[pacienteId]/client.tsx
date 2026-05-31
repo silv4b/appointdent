@@ -33,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { DataTablePagination } from "@/components/data-table-pagination"
 import { deleteAnamneseSession, getAnamneseForExport, saveAnamneseSession, updateAnamneseSession } from "@/lib/actions/anamnese"
 import { getMyAnamnesisTemplates } from "@/lib/actions/anamnesis-templates"
 import { generateAnamnesePdf } from "@/lib/utils/export-anamnese-pdf"
@@ -40,7 +41,7 @@ import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 import { Database } from "@/types/database"
 import { format } from "date-fns"
-import { Eye, FileDown, FileText, GripVertical, Loader2, Maximize2, Minimize2, MoreVertical, Pen, Plus, Stethoscope, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronUp, Eye, FileDown, FileText, GripVertical, Loader2, Maximize2, Minimize2, MoreVertical, Pen, Plus, Stethoscope, Trash2 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -62,8 +63,8 @@ interface AnamneseField {
   content: string
 }
 
-export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
-  const [patient, setPatient] = useState<{ id: string; name: string; phone: string | null; birth_date: string | null; notes: string | null } | null>(null)
+export function PacienteAnamneseClient({ pacienteId, appointmentId, sessionId }: { pacienteId: string; appointmentId?: string; sessionId?: string }) {
+  const [patient, setPatient] = useState<{ id: string; name: string; email: string | null; phone: string | null; birth_date: string | null; notes: string | null } | null>(null)
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [sessions, setSessions] = useState<AnamneseSession[]>([])
   const [loading, setLoading] = useState(true)
@@ -89,6 +90,111 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
   const [availableTemplates, setAvailableTemplates] = useState<{ id: string; name: string; fields: { label: string }[] }[]>([])
   const [loadingTemplates, setLoadingTemplates] = useState(false)
   const [focused, setFocused] = useState(false)
+  const [linkedAppointment, setLinkedAppointment] = useState<Appointment | null>(null)
+
+  const statusColorMap: Record<string, string> = {
+    scheduled: "bg-amber-100 text-amber-800",
+    confirmed: "bg-blue-100 text-blue-800",
+    in_progress: "bg-orange-100 text-orange-800",
+    completed: "bg-green-100 text-green-800",
+    cancelled: "bg-red-100 text-red-800",
+  }
+
+  const statusLabelMap: Record<string, string> = {
+    scheduled: "Agendado",
+    confirmed: "Confirmado",
+    in_progress: "Em Andamento",
+    completed: "Concluído",
+    cancelled: "Cancelado",
+  }
+
+  // Filtros e ordenação
+  const [anamSearch, setAnamSearch] = useState("")
+  const [anamDateStart, setAnamDateStart] = useState("")
+  const [anamDateEnd, setAnamDateEnd] = useState("")
+  const [apptSortCol, setApptSortCol] = useState<"start_time" | "dentists.name" | "procedures.name">("start_time")
+  const [apptSortDir, setApptSortDir] = useState<"asc" | "desc">("desc")
+  const [anamSortCol, setAnamSortCol] = useState<"created_at" | "title" | "dentists.name">("created_at")
+  const [anamSortDir, setAnamSortDir] = useState<"asc" | "desc">("desc")
+
+  const toggleApptSort = (col: typeof apptSortCol) => {
+    if (apptSortCol === col) setApptSortDir((d) => (d === "asc" ? "desc" : "asc"))
+    else { setApptSortCol(col); setApptSortDir("asc") }
+  }
+
+  const toggleAnamSort = (col: typeof anamSortCol) => {
+    if (anamSortCol === col) setAnamSortDir((d) => (d === "asc" ? "desc" : "asc"))
+    else { setAnamSortCol(col); setAnamSortDir("asc") }
+  }
+
+  const filteredAppointments = [...appointments]
+    .filter((a) => {
+      if (anamDateStart && a.start_time < anamDateStart) return false
+      if (anamDateEnd && a.start_time > anamDateEnd + "T23:59:59") return false
+      return true
+    })
+    .sort((a, b) => {
+      const dir = apptSortDir === "asc" ? 1 : -1
+      if (apptSortCol === "start_time") return (new Date(a.start_time).getTime() - new Date(b.start_time).getTime()) * dir
+      if (apptSortCol === "dentists.name") return ((a.dentists?.name ?? "").localeCompare(b.dentists?.name ?? "")) * dir
+      if (apptSortCol === "procedures.name") return ((a.procedures?.name ?? "").localeCompare(b.procedures?.name ?? "")) * dir
+      return 0
+    })
+
+  const filteredSessions = [...sessions]
+    .filter((s) => {
+      if (anamSearch) {
+        const q = anamSearch.toLowerCase()
+        const titleMatch = (s.title ?? "").toLowerCase().includes(q)
+        const dentistMatch = (s.dentists?.name ?? s.appointments?.dentists?.name ?? "").toLowerCase().includes(q)
+        if (!titleMatch && !dentistMatch) return false
+      }
+      if (anamDateStart && s.created_at < anamDateStart) return false
+      if (anamDateEnd && s.created_at > anamDateEnd + "T23:59:59") return false
+      return true
+    })
+    .sort((a, b) => {
+      const dir = anamSortDir === "asc" ? 1 : -1
+      if (anamSortCol === "created_at") return (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) * dir
+      if (anamSortCol === "title") return ((a.title ?? "").localeCompare(b.title ?? "")) * dir
+      if (anamSortCol === "dentists.name") return ((a.dentists?.name ?? a.appointments?.dentists?.name ?? "").localeCompare(b.dentists?.name ?? b.appointments?.dentists?.name ?? "")) * dir
+      return 0
+    })
+
+  // Paginação
+  const [anamPage, setAnamPage] = useState(1)
+  const [anamPageSize, setAnamPageSize] = useState(20)
+  const anamTotal = filteredSessions.length
+  const anamTotalPages = Math.ceil(anamTotal / anamPageSize)
+  const paginatedSessions = filteredSessions.slice((anamPage - 1) * anamPageSize, anamPage * anamPageSize)
+
+  const [apptPage, setApptPage] = useState(1)
+  const [apptPageSize, setApptPageSize] = useState(20)
+  const apptTotal = filteredAppointments.length
+  const apptTotalPages = Math.ceil(apptTotal / apptPageSize)
+  const paginatedAppointments = filteredAppointments.slice((apptPage - 1) * apptPageSize, apptPage * apptPageSize)
+
+  useEffect(() => {
+    if (anamSearch || anamDateStart || anamDateEnd) setAnamPage(1)
+  }, [anamSearch, anamDateStart, anamDateEnd])
+
+  useEffect(() => {
+    if (anamDateStart || anamDateEnd) setApptPage(1)
+  }, [anamDateStart, anamDateEnd])
+
+  useEffect(() => {
+    if (appointmentId && appointments.length > 0) {
+      const found = appointments.find((a) => a.id === appointmentId)
+      setLinkedAppointment(found ?? null)
+    }
+  }, [appointmentId, appointments])
+
+  useEffect(() => {
+    if (sessionId && sessions.length > 0) {
+      const found = sessions.find((s) => s.id === sessionId)
+      if (found) setViewSession(found)
+    }
+  }, [sessionId, sessions])
 
   useEffect(() => {
     let cancelled = false
@@ -168,7 +274,7 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
     setLoadingTemplates(true)
     const res = await getMyAnamnesisTemplates()
     if ("data" in res) {
-      setAvailableTemplates(res.data as { id: string; name: string; fields: { label: string; description?: string; defaultContent?: string }[] }[])
+      setAvailableTemplates(res.data as unknown as { id: string; name: string; fields: { label: string; description?: string; defaultContent?: string }[] }[])
     }
     setLoadingTemplates(false)
     setImportDialogOpen(true)
@@ -223,6 +329,7 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
     formData.set("title", formTitle.trim())
     formData.set("fields", JSON.stringify(filledFields))
     if (selectedDentistId) formData.set("dentist_id", selectedDentistId)
+    if (appointmentId) formData.set("appointment_id", appointmentId)
 
     if (editingSessionId) {
       formData.set("id", editingSessionId)
@@ -324,29 +431,67 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
     <div className={cn("grid gap-8", focused ? "grid-cols-1" : "grid-cols-1 xl:grid-cols-5")}>
       {/* Sidebar — Sessões anteriores */}
       <div className={cn("mt-11 order-2 space-y-6", focused ? "hidden" : "xl:order-1 xl:col-span-2")}>
-        {sessions.length > 0 ? (
-          <>
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Sessões Anteriores ({sessions.length})
-              </h2>
+        {/* Filtros */}
+        <div className="space-y-3">
+          <Input
+            placeholder="Buscar por título ou dentista..."
+            value={anamSearch}
+            onChange={(e) => setAnamSearch(e.target.value)}
+            className="h-9 text-sm"
+          />
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Label className="text-[10px] text-muted-foreground">Data início</Label>
+              <Input type="date" value={anamDateStart} onChange={(e) => setAnamDateStart(e.target.value)} className="h-9 text-xs" />
+            </div>
+            <div className="flex-1">
+              <Label className="text-[10px] text-muted-foreground">Data fim</Label>
+              <Input type="date" value={anamDateEnd} onChange={(e) => setAnamDateEnd(e.target.value)} className="h-9 text-xs" />
+            </div>
+          </div>
+        </div>
+
+        {/* Sessões Anteriores */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Sessões Anteriores ({filteredSessions.length})
+            </h2>
+            {filteredSessions.length > 0 && (
               <Button variant="outline" size="sm" onClick={handleExportAll} title="Exportar todas as sessões">
                 <FileDown className="mr-1 h-3.5 w-3.5" />
                 Exportar Todas
               </Button>
-            </div>
+            )}
+          </div>
+          {filteredSessions.length > 0 ? (
             <div className="rounded-xl border bg-card">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Título</TableHead>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Dentista</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleAnamSort("title")}>
+                      <span className="inline-flex items-center gap-1">
+                        Título
+                        {anamSortCol === "title" && (anamSortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
+                      </span>
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleAnamSort("created_at")}>
+                      <span className="inline-flex items-center gap-1">
+                        Data
+                        {anamSortCol === "created_at" && (anamSortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
+                      </span>
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleAnamSort("dentists.name")}>
+                      <span className="inline-flex items-center gap-1">
+                        Dentista
+                        {anamSortCol === "dentists.name" && (anamSortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
+                      </span>
+                    </TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sessions.map((s) => (
+                  {paginatedSessions.length > 0 ? paginatedSessions.map((s) => (
                     <TableRow key={s.id}>
                       <TableCell className="font-medium text-xs">{s.title ?? "Sessão"}</TableCell>
                       <TableCell className="text-xs">{format(new Date(s.created_at), "dd/MM/yyyy HH:mm")}</TableCell>
@@ -382,42 +527,73 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
                         </DropdownMenu>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+                        Nenhuma sessão encontrada com os filtros atuais.
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
+              <DataTablePagination
+                page={anamPage}
+                pageSize={anamPageSize}
+                total={anamTotal}
+                onPageChange={setAnamPage}
+                onPageSizeChange={(s) => { setAnamPageSize(s); setAnamPage(1) }}
+              />
             </div>
-          </>
-        ) : (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12">
-            <FileText className="h-8 w-8 text-muted-foreground" />
-            <p className="mt-3 text-sm font-medium">Nenhuma sessão anterior</p>
-            <p className="text-xs text-muted-foreground">As sessões salvas aparecerão aqui.</p>
-          </div>
-        )}
+          ) : (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12">
+              <FileText className="h-8 w-8 text-muted-foreground" />
+              <p className="mt-3 text-sm font-medium">Nenhuma sessão anterior</p>
+              <p className="text-xs text-muted-foreground">As sessões salvas aparecerão aqui.</p>
+            </div>
+          )}
+        </div>
 
-        {appointments.length > 0 && (
+        {/* Histórico de Atendimentos */}
+        {filteredAppointments.length > 0 && (
           <div>
             <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-              Histórico de Atendimentos
+              Histórico de Atendimentos ({apptTotal})
             </h2>
             <div className="rounded-xl border bg-card">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Dentista</TableHead>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleApptSort("dentists.name")}>
+                      <span className="inline-flex items-center gap-1">
+                        Dentista
+                        {apptSortCol === "dentists.name" && (apptSortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
+                      </span>
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleApptSort("start_time")}>
+                      <span className="inline-flex items-center gap-1">
+                        Data
+                        {apptSortCol === "start_time" && (apptSortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
+                      </span>
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleApptSort("procedures.name")}>
+                      <span className="inline-flex items-center gap-1">
+                        Procedimento
+                        {apptSortCol === "procedures.name" && (apptSortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
+                      </span>
+                    </TableHead>
+                    <TableHead>Situação</TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {appointments.map((a) => (
+                  {paginatedAppointments.map((a) => (
                     <TableRow key={a.id}>
                       <TableCell className="font-medium text-xs">{a.dentists?.name ?? "-"}</TableCell>
                       <TableCell className="text-xs">{format(new Date(a.start_time), "dd/MM/yyyy")}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{a.procedures?.name ?? "-"}</TableCell>
                       <TableCell>
-                        <span className="inline-flex items-center rounded-md border border-transparent px-2 py-0.5 text-[10px] font-medium capitalize shadow-sm bg-muted text-muted-foreground">
-                          {a.status}
+                        <span className={cn("inline-flex items-center justify-center rounded-md border border-transparent px-2 py-0.5 text-[10px] font-medium capitalize min-w-[7.5rem]", statusColorMap[a.status as keyof typeof statusColorMap] ?? "bg-muted text-muted-foreground")}>
+                          {statusLabelMap[a.status as keyof typeof statusLabelMap] ?? a.status}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -429,6 +605,13 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
                   ))}
                 </TableBody>
               </Table>
+              <DataTablePagination
+                page={apptPage}
+                pageSize={apptPageSize}
+                total={apptTotal}
+                onPageChange={setApptPage}
+                onPageSizeChange={(s) => { setApptPageSize(s); setApptPage(1) }}
+              />
             </div>
           </div>
         )}
@@ -436,15 +619,29 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
 
       {/* Main — Formulário inline */}
       <div className={cn("order-1", focused ? "xl:col-span-1" : "xl:col-span-3")}>
-        <div className="rounded-2xl border bg-card shadow-sm mt-11">
+        <div className="rounded-2xl border bg-card mt-11">
           <div className="border-b px-6 py-5">
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">{patient.name}</h1>
-                {!focused && patient.phone && (
+                {!focused && (
                   <p className="mt-1 text-sm text-muted-foreground">
                     {patient.phone && <span className="mr-4">Tel: {patient.phone}</span>}
+                    {patient.email && <span className="mr-4">Email: {patient.email}</span>}
                     {patient.birth_date && <span>Nasc: {format(new Date(patient.birth_date), "dd/MM/yyyy")}</span>}
+                  </p>
+                )}
+                {linkedAppointment && (
+                  <p className="mt-2 inline-flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
+                    <FileText className="h-3.5 w-3.5" />
+                    Vinculado ao agendamento de{" "}
+                    <strong>{format(new Date(linkedAppointment.start_time), "dd/MM/yyyy HH:mm")}</strong>
+                    {linkedAppointment.dentists?.name && (
+                      <>com <strong>{linkedAppointment.dentists.name}</strong></>
+                    )}
+                    {linkedAppointment.procedures?.name && (
+                      <>({linkedAppointment.procedures.name})</>
+                    )}
                   </p>
                 )}
               </div>
@@ -659,7 +856,7 @@ export function PacienteAnamneseClient({ pacienteId }: { pacienteId: string }) {
                   <span>{format(new Date(viewAppointment.end_time), "dd/MM/yyyy HH:mm")}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Status</span>
+                  <span className="text-muted-foreground">Situação</span>
                   <span className="capitalize">{viewAppointment.status}</span>
                 </div>
                 {viewAppointment.notes && (
