@@ -29,6 +29,7 @@ export async function createPatient(formData: FormData) {
       name: parsed.data.name,
       cpf: parsed.data.cpf || null,
       phone: parsed.data.phone || null,
+      email: parsed.data.email || null,
       birth_date: parsed.data.birth_date || null,
       notes: parsed.data.notes || null,
       active: parsed.data.active ?? true,
@@ -53,8 +54,9 @@ export async function quickCreatePatient(formData: FormData) {
     .insert({
       name: parsed.data.name,
       phone: parsed.data.phone || null,
+      email: parsed.data.email || null,
     })
-    .select("id, name")
+    .select("id, name, email")
     .single()
 
   if (error) return err(error.message)
@@ -74,6 +76,7 @@ export async function updatePatient(formData: FormData) {
     name: fields.name,
     cpf: fields.cpf || null,
     phone: fields.phone || null,
+    email: fields.email || null,
     birth_date: fields.birth_date || null,
     notes: fields.notes || null,
     active: fields.active,

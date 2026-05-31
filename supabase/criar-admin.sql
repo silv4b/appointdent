@@ -29,7 +29,7 @@ BEGIN
   ) VALUES (
     '00000000-0000-0000-0000-000000000000', user_id,
     'authenticated', 'authenticated',
-    admin_email, crypt(admin_senha, gen_salt('bf')),
+    admin_email, extensions.crypt(admin_senha, extensions.gen_salt('bf')),
     now(), now(),
     '', '', '', '', '', '', '', '', now(),
     '{"provider":"email","providers":["email"]}',
@@ -47,6 +47,10 @@ BEGIN
     now(), now(), now()
   );
 
+  -- O trigger handle_new_user() cria o profile com role 'receptionist'
+  -- (padrão atual, migration 00017); aqui forçamos admin
+  UPDATE public.profiles SET role = 'admin' WHERE id = user_id;
+
   RETURN user_id;
 END;
 $$;
@@ -56,6 +60,6 @@ $$;
 -- ================================================================
 -- SELECT criar_admin('admin@minha-clinica.com', 'MinhaSenhaForte123', 'Admin da Clínica');
 
--- O trigger handle_new_user() cria o profile automaticamente
--- com role = 'admin'. Pronto para login.
+-- O trigger handle_new_user() cria o profile automaticamente,
+-- e a função já ajusta a role para 'admin'. Pronto para login.
 -- ================================================================

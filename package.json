@@ -9,7 +9,8 @@
     "lint": "eslint",
     "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\"",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "supabase": "supabase migration up && supabase stop && supabase start"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

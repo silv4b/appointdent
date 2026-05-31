@@ -4,6 +4,7 @@ export const patientSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório").max(200),
   cpf: z.string().max(14).nullable().optional(),
   phone: z.string().max(20).nullable().optional(),
+  email: z.string().email("Email inválido").max(200).nullable().optional(),
   birth_date: z.string().max(10).nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
   active: z.preprocess((v) => v === "on" || v === true, z.boolean()).optional().default(true),
@@ -12,6 +13,7 @@ export const patientSchema = z.object({
 export const quickPatientSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório").max(200),
   phone: z.string().max(20).nullable().optional(),
+  email: z.string().email("Email inválido").max(200).nullable().optional(),
 })
 
 export const dentistSchema = z.object({
