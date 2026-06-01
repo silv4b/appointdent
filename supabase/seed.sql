@@ -213,7 +213,18 @@ BEGIN
   END LOOP;
 END $$;
 
--- 7. DENTIST_PROCEDURES (cada dentista associa os procedimentos com preço próprio)
+-- 7. HORÁRIOS DE FUNCIONAMENTO DA CLÍNICA
+INSERT INTO clinic_hours (day_of_week, open_time, close_time, is_open) VALUES
+  (0, '00:00', '01:00', false),
+  (1, '08:00', '18:00', true),
+  (2, '08:00', '18:00', true),
+  (3, '08:00', '18:00', true),
+  (4, '08:00', '18:00', true),
+  (5, '08:00', '18:00', true),
+  (6, '08:00', '12:00', true)
+ON CONFLICT (day_of_week) DO NOTHING;
+
+-- 8. DENTIST_PROCEDURES (cada dentista associa os procedimentos com preço próprio)
 DO $$
 DECLARE
   d RECORD;
@@ -233,7 +244,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- 8. AGENDAMENTOS (appointments) — ~15 por dentista, sem overlaps
+-- 9. AGENDAMENTOS (appointments) — ~15 por dentista, sem overlaps
 DO $$
 DECLARE
   d_ids UUID[]; p_ids UUID[]; pr_ids UUID[];
@@ -241,7 +252,7 @@ DECLARE
   day_offset INT; slot_start TIMESTAMPTZ; slot_end TIMESTAMPTZ;
   dur INT; st TEXT; i INT; attempts INT;
   used tstzrange[];
-  statuses TEXT[] := ARRAY['scheduled', 'confirmed', 'completed', 'completed', 'completed', 'completed', 'cancelled'];
+  statuses TEXT[] := ARRAY['pending', 'scheduled', 'confirmed', 'completed', 'completed', 'completed', 'completed', 'cancelled'];
   hours INT[] := ARRAY[8, 9, 10, 11, 14, 15, 16];
 BEGIN
   SELECT ARRAY(SELECT id FROM patients ORDER BY name) INTO p_ids;
@@ -284,7 +295,7 @@ BEGIN
       IF day_offset < 0 THEN
         st := statuses[1 + floor(random() * 7)::int];
       ELSE
-        st := statuses[1 + floor(random() * 2)::int];
+        st := statuses[1 + floor(random() * 3)::int];
       END IF;
 
       INSERT INTO appointments (patient_id, dentist_id, procedure_id, start_time, end_time, status, notes)
@@ -297,7 +308,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- 9. SOLICITAÇÕES DE PROCEDIMENTOS (procedure_requests)
+-- 10. SOLICITAÇÕES DE PROCEDIMENTOS (procedure_requests)
 DO $$
 DECLARE
   v_dent2 UUID; v_dent3 UUID; v_dent4 UUID; v_dent5 UUID;

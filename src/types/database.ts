@@ -163,6 +163,72 @@ export type Database = {
           },
         ]
       }
+      clinic_hours: {
+        Row: {
+          id: string
+          day_of_week: number
+          open_time: string
+          close_time: string
+          is_open: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          day_of_week: number
+          open_time: string
+          close_time: string
+          is_open?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          day_of_week?: number
+          open_time?: string
+          close_time?: string
+          is_open?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      receptionist_dentists: {
+        Row: {
+          id: string
+          receptionist_id: string
+          dentist_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          receptionist_id: string
+          dentist_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          receptionist_id?: string
+          dentist_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receptionist_dentists_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receptionist_dentists_dentist_id_fkey"
+            columns: ["dentist_id"]
+            isOneToOne: false
+            referencedRelation: "dentists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       availability_slots: {
         Row: {
           created_at: string
