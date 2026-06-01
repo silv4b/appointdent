@@ -4,6 +4,7 @@ import { requireAuth, AuthError } from "@/lib/supabase/guard"
 import { revalidatePath } from "next/cache"
 import { anamneseSessionSchema, anamneseSessionUpdateSchema } from "@/lib/schemas"
 import { ok, err } from "@/lib/utils/action-response"
+import { getUserDentistFilter } from "@/lib/utils/access-filter"
 import { z } from "zod"
 
 export async function getProfile() {
@@ -34,6 +35,11 @@ export async function getMyAppointments(dentistId: string) {
   try {
     const { supabase } = await requireAuth()
 
+    const dentistFilter = await getUserDentistFilter()
+    if (dentistFilter !== null) {
+      if (!dentistFilter.includes(dentistId)) return []
+    }
+
     const { data } = await supabase
       .from("appointments")
       .select("*, patients(name), procedures(name, color, duration_minutes)")
@@ -50,12 +56,22 @@ export async function getPatientAppointments(patientId: string) {
   try {
     const { supabase } = await requireAuth()
 
-    const { data } = await supabase
+    let query = supabase
       .from("appointments")
       .select("*, patients(name), dentists(name), procedures(name, color, duration_minutes)")
       .eq("patient_id", patientId)
       .order("start_time", { ascending: false })
 
+    const dentistFilter = await getUserDentistFilter()
+    if (dentistFilter !== null) {
+      if (dentistFilter.length > 0) {
+        query = query.in("dentist_id", dentistFilter)
+      } else {
+        query = query.eq("dentist_id", "00000000-0000-0000-0000-000000000000")
+      }
+    }
+
+    const { data } = await query
     return data ?? []
   } catch {
     return []
@@ -65,22 +81,46 @@ export async function getPatientAppointments(patientId: string) {
 export async function getPatientAnamneseHistory(patientId: string) {
   const { supabase } = await requireAuth()
 
-  const [patientRes, appointments, sessions] = await Promise.all([
-    supabase.from("patients").select("id, name, phone, birth_date, notes").eq("id", patientId).single(),
-    supabase
-      .from("appointments")
-      .select("*, patients(name), dentists(name), procedures(name, color, duration_minutes)")
-      .eq("patient_id", patientId)
-      .order("start_time", { ascending: false }),
-    supabase
-      .from("anamnese_sessions")
-      .select("*, appointments(patients(name), dentists(name))")
-      .eq("patient_id", patientId)
-      .order("created_at", { ascending: false }),
+  const dentistFilter = await getUserDentistFilter()
+
+  const patientRes = supabase.from("patients").select("id, name, phone, birth_date, notes").eq("id", patientId).single()
+
+  let appointmentsQuery = supabase
+    .from("appointments")
+    .select("*, patients(name), dentists(name), procedures(name, color, duration_minutes)")
+    .eq("patient_id", patientId)
+    .order("start_time", { ascending: false })
+
+  if (dentistFilter !== null) {
+    if (dentistFilter.length > 0) {
+      appointmentsQuery = appointmentsQuery.in("dentist_id", dentistFilter)
+    } else {
+      appointmentsQuery = appointmentsQuery.eq("dentist_id", "00000000-0000-0000-0000-000000000000")
+    }
+  }
+
+  let sessionsQuery = supabase
+    .from("anamnese_sessions")
+    .select("*, appointments(patients(name), dentists(name))")
+    .eq("patient_id", patientId)
+    .order("created_at", { ascending: false })
+
+  if (dentistFilter !== null) {
+    if (dentistFilter.length > 0) {
+      sessionsQuery = sessionsQuery.in("dentist_id", dentistFilter)
+    } else {
+      sessionsQuery = sessionsQuery.eq("dentist_id", "00000000-0000-0000-0000-000000000000")
+    }
+  }
+
+  const [patientResult, appointments, sessions] = await Promise.all([
+    patientRes,
+    appointmentsQuery,
+    sessionsQuery,
   ])
 
   return {
-    patient: patientRes.data ?? null,
+    patient: patientResult.data ?? null,
     appointments: appointments.data ?? [],
     sessions: sessions.data ?? [],
   }
@@ -169,13 +209,30 @@ export async function searchPatients(query: string) {
   try {
     const { supabase } = await requireAuth()
 
-    const { data } = await supabase
+    let baseQuery = supabase
       .from("patients")
       .select("id, name, phone")
       .ilike("name", `%${query}%`)
       .order("name")
       .limit(20)
 
+    const dentistFilter = await getUserDentistFilter()
+    if (dentistFilter !== null) {
+      const { data: patientsWithAccess } = await supabase
+        .from("appointments")
+        .select("patient_id")
+        .in("dentist_id", dentistFilter.length > 0 ? dentistFilter : ["00000000-0000-0000-0000-000000000000"])
+
+      const patientIds = [...new Set(patientsWithAccess?.map((a) => a.patient_id) ?? [])]
+
+      if (patientIds.length > 0) {
+        baseQuery = baseQuery.in("id", patientIds)
+      } else {
+        baseQuery = baseQuery.in("id", [])
+      }
+    }
+
+    const { data } = await baseQuery
     return data ?? []
   } catch {
     return []
@@ -214,12 +271,22 @@ export async function getDentistList() {
   try {
     const { supabase } = await requireAuth()
 
-    const { data } = await supabase
+    let query = supabase
       .from("dentists")
       .select("id, name")
       .eq("active", true)
       .order("name")
 
+    const dentistFilter = await getUserDentistFilter()
+    if (dentistFilter !== null) {
+      if (dentistFilter.length > 0) {
+        query = query.in("id", dentistFilter)
+      } else {
+        query = query.in("id", [])
+      }
+    }
+
+    const { data } = await query
     return data ?? []
   } catch {
     return []

@@ -4,11 +4,30 @@ import { requireAuth } from "@/lib/supabase/guard"
 import { revalidatePath } from "next/cache"
 import { patientSchema, quickPatientSchema } from "@/lib/schemas"
 import { ok, err } from "@/lib/utils/action-response"
+import { getUserDentistFilter } from "@/lib/utils/access-filter"
 import { z } from "zod"
 
 export async function getPatients() {
   try {
     const { supabase } = await requireAuth()
+
+    const dentistFilter = await getUserDentistFilter()
+    if (dentistFilter !== null) {
+      const { data: patientsWithAccess } = await supabase
+        .from("appointments")
+        .select("patient_id")
+        .in("dentist_id", dentistFilter.length > 0 ? dentistFilter : ["00000000-0000-0000-0000-000000000000"])
+
+      const patientIds = [...new Set(patientsWithAccess?.map((a) => a.patient_id) ?? [])]
+
+      if (patientIds.length > 0) {
+        const { data } = await supabase.from("patients").select("*").in("id", patientIds).order("name")
+        return data ?? []
+      }
+
+      return []
+    }
+
     const { data } = await supabase.from("patients").select("*").order("name")
     return data ?? []
   } catch {

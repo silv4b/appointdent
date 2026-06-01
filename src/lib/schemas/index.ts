@@ -146,6 +146,13 @@ export const procedureRequestSchema = z.object({
   price: z.coerce.number().min(0).nullable().optional(),
 })
 
+export const clinicHoursSchema = z.object({
+  day_of_week: z.coerce.number().int().min(0).max(6),
+  open_time: z.string().min(1, "Início é obrigatório"),
+  close_time: z.string().min(1, "Fim é obrigatório"),
+  is_open: z.preprocess((v) => v === "on" || v === true, z.boolean()),
+})
+
 export type AppointmentInput = z.infer<typeof appointmentSchema>
 export type AvailabilitySlotInput = z.infer<typeof availabilitySlotSchema>
 export type DentistProcedureInput = z.infer<typeof dentistProcedureSchema>

@@ -4,16 +4,29 @@ import { requireAuth } from "@/lib/supabase/guard"
 import { revalidatePath } from "next/cache"
 import { availabilitySlotSchema } from "@/lib/schemas"
 import { ok, err } from "@/lib/utils/action-response"
+import { getUserDentistFilter } from "@/lib/utils/access-filter"
 import { z } from "zod"
 
 export async function getAvailabilitySlots() {
   try {
     const { supabase } = await requireAuth()
-    const { data } = await supabase
+
+    let query = supabase
       .from("availability_slots")
       .select("*, dentists(name)")
       .order("day_of_week")
       .order("start_time")
+
+    const dentistFilter = await getUserDentistFilter()
+    if (dentistFilter !== null) {
+      if (dentistFilter.length > 0) {
+        query = query.in("dentist_id", dentistFilter)
+      } else {
+        query = query.eq("dentist_id", "00000000-0000-0000-0000-000000000000")
+      }
+    }
+
+    const { data } = await query
     return data ?? []
   } catch {
     return []

@@ -4,11 +4,18 @@ import { requireAuth } from "@/lib/supabase/guard"
 import { revalidatePath } from "next/cache"
 import { dentistProcedureSchema } from "@/lib/schemas"
 import { ok, err } from "@/lib/utils/action-response"
+import { getUserDentistFilter } from "@/lib/utils/access-filter"
 import { z } from "zod"
 
 export async function getDentistProcedures(dentistId: string) {
   try {
     const { supabase } = await requireAuth()
+
+    const dentistFilter = await getUserDentistFilter()
+    if (dentistFilter !== null) {
+      if (!dentistFilter.includes(dentistId)) return []
+    }
+
     const { data } = await supabase
       .from("dentist_procedures")
       .select("*, procedures(name, duration_minutes, price)")

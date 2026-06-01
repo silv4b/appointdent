@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { format } from "date-fns"
 import { appointmentSchema, appointmentUpdateSchema } from "@/lib/schemas"
 import { ok, err } from "@/lib/utils/action-response"
+import { getUserDentistFilter } from "@/lib/utils/access-filter"
 import { z } from "zod"
 
 export async function getAppointments(date: string) {
@@ -13,12 +14,52 @@ export async function getAppointments(date: string) {
     const dayStart = `${date}T00:00:00Z`
     const dayEnd = `${date}T23:59:59Z`
 
-    const { data } = await supabase
+    const dentistFilter = await getUserDentistFilter()
+
+    let query = supabase
       .from("appointments")
       .select("*, patients(name), dentists(name), procedures(name, color, duration_minutes)")
       .gte("start_time", dayStart)
       .lte("start_time", dayEnd)
       .order("start_time")
+
+    if (dentistFilter !== null) {
+      if (dentistFilter.length > 0) {
+        query = query.in("dentist_id", dentistFilter)
+      } else {
+        query = query.eq("dentist_id", "00000000-0000-0000-0000-000000000000")
+      }
+    }
+
+    const { data } = await query
+
+    return data ?? []
+  } catch {
+    return []
+  }
+}
+
+export async function getPendingAppointments() {
+  try {
+    const { supabase } = await requireAuth()
+
+    const dentistFilter = await getUserDentistFilter()
+
+    let query = supabase
+      .from("appointments")
+      .select("*, patients(name), dentists(name), procedures(name, color, duration_minutes)")
+      .eq("status", "pending")
+      .order("start_time")
+
+    if (dentistFilter !== null) {
+      if (dentistFilter.length > 0) {
+        query = query.in("dentist_id", dentistFilter)
+      } else {
+        query = query.eq("dentist_id", "00000000-0000-0000-0000-000000000000")
+      }
+    }
+
+    const { data } = await query
 
     return data ?? []
   } catch {
@@ -30,12 +71,24 @@ export async function getAppointmentsRange(start: string, end: string) {
   try {
     const { supabase } = await requireAuth()
 
-    const { data } = await supabase
+    const dentistFilter = await getUserDentistFilter()
+
+    let query = supabase
       .from("appointments")
       .select("*, patients(name), dentists(name), procedures(name, color, duration_minutes)")
       .gte("start_time", start)
       .lte("start_time", end)
       .order("start_time")
+
+    if (dentistFilter !== null) {
+      if (dentistFilter.length > 0) {
+        query = query.in("dentist_id", dentistFilter)
+      } else {
+        query = query.eq("dentist_id", "00000000-0000-0000-0000-000000000000")
+      }
+    }
+
+    const { data } = await query
 
     return data ?? []
   } catch {
@@ -54,6 +107,7 @@ async function checkOverlap(
     .from("appointments")
     .select("id, start_time, end_time, patients!inner(name), dentists!inner(name)")
     .eq("dentist_id", dentistId)
+    .neq("status", "cancelled")
     .lt("start_time", endTime)
     .gt("end_time", startTime)
 
@@ -94,6 +148,38 @@ async function checkBlockedSlot(
   if (data && data.length > 0) {
     const block = data[0]
     return `Horário bloqueado: o dentista possui um bloqueio das ${block.start_time.slice(0, 5)} às ${block.end_time.slice(0, 5)} neste dia`
+  }
+
+  return null
+}
+
+async function checkClinicHours(
+  supabase: Awaited<ReturnType<typeof import("@/lib/supabase/guard").requireAuth>>["supabase"],
+  startTime: string,
+  endTime: string,
+) {
+  const date = new Date(startTime)
+  const dayOfWeek = date.getUTCDay()
+
+  const { data } = await supabase
+    .from("clinic_hours")
+    .select("*")
+    .eq("day_of_week", dayOfWeek)
+    .single()
+
+  if (!data) return "Horário de funcionamento não configurado para este dia"
+
+  if (!data.is_open) return "A clínica está fechada neste dia"
+
+  const startTimeOnly = startTime.slice(11, 16)
+  const endTimeOnly = endTime.slice(11, 16)
+
+  if (startTimeOnly < data.open_time.slice(0, 5)) {
+    return `A clínica abre às ${data.open_time.slice(0, 5)} neste dia`
+  }
+
+  if (endTimeOnly > data.close_time.slice(0, 5)) {
+    return `A clínica fecha às ${data.close_time.slice(0, 5)} neste dia`
   }
 
   return null
@@ -177,6 +263,9 @@ export async function createAppointment(formData: FormData) {
   const blocked = await checkBlockedSlot(supabase, dentist_id, startTime, endTime)
   if (blocked) return err(blocked)
 
+  const clinicError = await checkClinicHours(supabase, startTime, endTime)
+  if (clinicError) return err(clinicError)
+
   const { error } = await supabase.from("appointments").insert({
     patient_id,
     dentist_id,
@@ -184,12 +273,40 @@ export async function createAppointment(formData: FormData) {
     start_time: startTime,
     end_time: endTime,
     notes: notes || null,
-    status: "scheduled",
+    status: "pending",
     return_to_id: return_to_id || null,
   })
 
   if (error) return err(error.message)
   revalidatePath("/agenda")
+  return ok()
+}
+
+export async function confirmAppointment(id: string) {
+  const { supabase } = await requireAuth()
+
+  const { error } = await supabase
+    .from("appointments")
+    .update({ status: "confirmed" })
+    .eq("id", id)
+
+  if (error) return err(error.message)
+  revalidatePath("/agenda")
+  revalidatePath("/confirmacao")
+  return ok()
+}
+
+export async function rejectAppointment(id: string) {
+  const { supabase } = await requireAuth()
+
+  const { error } = await supabase
+    .from("appointments")
+    .update({ status: "cancelled" })
+    .eq("id", id)
+
+  if (error) return err(error.message)
+  revalidatePath("/agenda")
+  revalidatePath("/confirmacao")
   return ok()
 }
 
@@ -211,6 +328,9 @@ export async function updateAppointment(formData: FormData) {
   const blocked = await checkBlockedSlot(supabase, dentist_id, startTime, endTime)
   if (blocked) return err(blocked)
 
+  const clinicError = await checkClinicHours(supabase, startTime, endTime)
+  if (clinicError) return err(clinicError)
+
   const { error } = await supabase
     .from("appointments")
     .update({
@@ -220,7 +340,7 @@ export async function updateAppointment(formData: FormData) {
       start_time: startTime,
       end_time: endTime,
       notes: notes || null,
-      status: status || "scheduled",
+      status: status || "pending",
       return_to_id: return_to_id || null,
     })
     .eq("id", id)

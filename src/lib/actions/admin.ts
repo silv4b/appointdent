@@ -127,6 +127,22 @@ export async function updateUser(formData: FormData) {
     })
 
     if (error) return err(error.message)
+
+    const dentistIdsRaw = formData.get("dentist_ids") as string | null
+    if (parsed.data.role === "receptionist" && dentistIdsRaw) {
+      const dentistIds: string[] = JSON.parse(dentistIdsRaw)
+      await supabase.from("receptionist_dentists").delete().eq("receptionist_id", parsed.data.userId)
+      if (dentistIds.length > 0) {
+        const inserts = dentistIds.map((dentist_id: string) => ({
+          receptionist_id: parsed.data.userId,
+          dentist_id,
+        }))
+        await supabase.from("receptionist_dentists").insert(inserts)
+      }
+    } else if (parsed.data.role !== "receptionist") {
+      await supabase.from("receptionist_dentists").delete().eq("receptionist_id", parsed.data.userId)
+    }
+
     revalidatePath("/admin/usuarios")
     return ok()
   } catch {
@@ -142,7 +158,7 @@ export async function createUser(formData: FormData) {
     const parsed = createUserSchema.safeParse(raw)
     if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
 
-    const { error } = await (supabase as any).rpc("criar_usuario", {
+    const { data: userId, error } = await (supabase as any).rpc("criar_usuario", {
       usuario_email: parsed.data.email,
       usuario_senha: parsed.data.password,
       usuario_nome: parsed.data.name,
@@ -151,6 +167,19 @@ export async function createUser(formData: FormData) {
     })
 
     if (error) return err(error.message)
+
+    const dentistIdsRaw = formData.get("dentist_ids") as string | null
+    if (parsed.data.role === "receptionist" && dentistIdsRaw) {
+      const dentistIds: string[] = JSON.parse(dentistIdsRaw)
+      if (dentistIds.length > 0) {
+        const inserts = dentistIds.map((dentist_id: string) => ({
+          receptionist_id: userId as string,
+          dentist_id,
+        }))
+        await supabase.from("receptionist_dentists").insert(inserts)
+      }
+    }
+
     revalidatePath("/admin/usuarios")
     return ok()
   } catch {
