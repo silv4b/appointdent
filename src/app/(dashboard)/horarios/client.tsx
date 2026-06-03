@@ -44,6 +44,10 @@ const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 
 const DAY_NAMES_FULL = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"]
 
+function parseTime(value: string) {
+  return value.length === 5 ? value : value.slice(0, 5)
+}
+
 function SlotDialog({
   open,
   onOpenChange,
@@ -164,8 +168,6 @@ function SlotDialog({
 function ClinicHoursSection() {
   const [hours, setHours] = useState<ClinicHour[]>([])
   const [loading, setLoading] = useState(true)
-  const [savingDay, setSavingDay] = useState<number | null>(null)
-  const [edits, setEdits] = useState<Record<number, { open_time: string; close_time: string }>>({})
 
   const fetch = useCallback(async () => {
     const supabase = createClient()
@@ -175,11 +177,6 @@ function ClinicHoursSection() {
       .order("day_of_week")
     if (data) {
       setHours(data)
-      const initial: Record<number, { open_time: string; close_time: string }> = {}
-      for (const h of data) {
-        initial[h.day_of_week] = { open_time: h.open_time.slice(0, 5), close_time: h.close_time.slice(0, 5) }
-      }
-      setEdits(initial)
     }
     setLoading(false)
   }, [])
@@ -203,14 +200,11 @@ function ClinicHoursSection() {
     }
   }
 
-  const handleSaveDay = async (day: ClinicHour) => {
-    const edit = edits[day.day_of_week]
-    if (!edit) return
-    setSavingDay(day.day_of_week)
+  const handleSaveDay = async (day: ClinicHour, openTime: string, closeTime: string) => {
     const form = new FormData()
     form.set("day_of_week", day.day_of_week.toString())
-    form.set("open_time", edit.open_time)
-    form.set("close_time", edit.close_time)
+    form.set("open_time", openTime)
+    form.set("close_time", closeTime)
     form.set("is_open", day.is_open ? "on" : "")
     const result = await updateClinicHours(form)
     if (result?.error) {
@@ -219,7 +213,6 @@ function ClinicHoursSection() {
       toast.success(`${DAY_NAMES_FULL[day.day_of_week]} atualizado`)
       fetch()
     }
-    setSavingDay(null)
   }
 
   if (loading) {
@@ -246,21 +239,15 @@ function ClinicHoursSection() {
 
       <div className="divide-y">
         {hours.map((day) => {
-          const edit = edits[day.day_of_week] ?? { open_time: day.open_time.slice(0, 5), close_time: day.close_time.slice(0, 5) }
-          const changed = edit.open_time !== day.open_time.slice(0, 5) || edit.close_time !== day.close_time.slice(0, 5)
-
           return (
             <ClinicHourRow
               key={day.day_of_week}
               day={day}
-              openTime={edit.open_time}
-              closeTime={edit.close_time}
-              changed={changed}
-              saving={savingDay === day.day_of_week}
-              onOpenTimeChange={(v) => setEdits((prev) => ({ ...prev, [day.day_of_week]: { ...prev[day.day_of_week], open_time: v } }))}
-              onCloseTimeChange={(v) => setEdits((prev) => ({ ...prev, [day.day_of_week]: { ...prev[day.day_of_week], close_time: v } }))}
+              openTime={parseTime(day.open_time)}
+              closeTime={parseTime(day.close_time)}
+              onOpenTimeChange={(v) => handleSaveDay(day, v, parseTime(day.close_time))}
+              onCloseTimeChange={(v) => handleSaveDay(day, parseTime(day.open_time), v)}
               onToggleOpen={() => handleToggleOpen(day)}
-              onSave={() => handleSaveDay(day)}
             />
           )
         })}
@@ -273,22 +260,16 @@ function ClinicHourRow({
   day,
   openTime,
   closeTime,
-  changed,
-  saving,
   onOpenTimeChange,
   onCloseTimeChange,
   onToggleOpen,
-  onSave,
 }: {
   day: ClinicHour
   openTime: string
   closeTime: string
-  changed: boolean
-  saving: boolean
   onOpenTimeChange: (v: string) => void
   onCloseTimeChange: (v: string) => void
   onToggleOpen: () => void
-  onSave: () => void
 }) {
 
   return (
@@ -325,11 +306,6 @@ function ClinicHourRow({
               className="h-8 w-28"
             />
           </div>
-          {changed && (
-            <Button size="sm" onClick={onSave} disabled={saving}>
-              {saving ? "Salvando..." : "Salvar"}
-            </Button>
-          )}
         </div>
       )}
     </div>

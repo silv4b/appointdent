@@ -143,7 +143,8 @@ button.rbc-input::-moz-focus-inner {
   line-height: 1.2;
   font-weight: 500;
   transition: background-color 150ms ease, box-shadow 150ms ease,
-    transform 75ms ease, border-color 150ms ease;
+    transform 75ms ease, border-color 150ms ease, top 200ms ease,
+    height 200ms ease, left 200ms ease, width 200ms ease;
   outline: none;
 }
 .rbc-event:active {
@@ -594,6 +595,12 @@ button.rbc-input::-moz-focus-inner {
 .rbc-day-bg {
   background-color: var(--background);
   border-right: 1px solid var(--border);
+}
+.rbc-day-bg:last-child {
+  border-right: none;
+}
+.rbc-header:last-child {
+  border-right: none;
 }
 .rbc-month-view {
   border: none;

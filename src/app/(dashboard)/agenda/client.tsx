@@ -838,6 +838,7 @@ export function AgendaClient() {
   const [receptionistDentistIds, setReceptionistDentistIds] = useState<string[]>([])
   const [isReady, setIsReady] = useState(false)
   const [dentistProcedureMap, setDentistProcedureMap] = useState<Record<string, string[]>>({})
+  const [clinicHours, setClinicHours] = useState<Database["public"]["Tables"]["clinic_hours"]["Row"][]>([])
 
   useEffect(() => {
     const supabase = createClient()
@@ -864,6 +865,12 @@ export function AgendaClient() {
             .eq("receptionist_id", user.id)
           setReceptionistDentistIds(links?.map((r) => r.dentist_id) ?? [])
         }
+
+        const { data: hours } = await supabase
+          .from("clinic_hours")
+          .select("*")
+          .order("day_of_week")
+        setClinicHours(hours ?? [])
 
         setIsReady(true)
       })
@@ -979,14 +986,35 @@ export function AgendaClient() {
     setDialogOpen(true)
   }
 
+  const checkSlotInHours = useCallback((date: Date) => {
+    const dayOfWeek = date.getDay()
+    const hour = date.getHours()
+    const minute = date.getMinutes()
+    const dayHours = clinicHours.find((h) => h.day_of_week === dayOfWeek)
+    if (!dayHours || !dayHours.is_open) return "Clínica fechada neste dia da semana."
+    const slotMinutes = hour * 60 + minute
+    const openParts = dayHours.open_time.split(":").map(Number)
+    const closeParts = dayHours.close_time.split(":").map(Number)
+    const openMinutes = openParts[0] * 60 + openParts[1]
+    const closeMinutes = closeParts[0] * 60 + closeParts[1]
+    if (slotMinutes < openMinutes || slotMinutes >= closeMinutes)
+      return `Clínica aberta apenas das ${dayHours.open_time} às ${dayHours.close_time}.`
+    return null
+  }, [clinicHours])
+
   const handleSelectSlot = useCallback((slotInfo: SlotInfo) => {
+    const msg = checkSlotInHours(slotInfo.start)
+    if (msg) {
+      toast.error(msg)
+      return
+    }
     setEditAppointment(null)
     setCreatedPatientId(null)
     setReturnToId(null)
     setClickedDate(toDateInput(slotInfo.start))
     setClickedHour(slotInfo.start.getHours())
     setDialogOpen(true)
-  }, [])
+  }, [checkSlotInHours])
 
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
     const a = event.appointment
@@ -1008,6 +1036,14 @@ export function AgendaClient() {
   }, [])
 
   const handleSave = async (formData: FormData) => {
+    const startRaw = formData.get("start_time") as string
+    const endRaw = formData.get("end_time") as string
+    const msg = (startRaw ? checkSlotInHours(new Date(startRaw)) : null)
+      ?? (endRaw ? checkSlotInHours(new Date(endRaw)) : null)
+    if (msg) {
+      toast.error(msg)
+      return
+    }
     const result = editAppointment
       ? await updateAppointment(formData)
       : await createAppointment(formData)
@@ -1045,26 +1081,52 @@ export function AgendaClient() {
   }
 
   const handleEventDrop = useCallback(async ({ event, start, end }: EventInteractionArgs<CalendarEvent>) => {
+    const msg = checkSlotInHours(new Date(start as Date)) || checkSlotInHours(new Date(end as Date))
+    if (msg) {
+      toast.error(msg)
+      return
+    }
+    const prev = [...appointments]
+    setAppointments((current) =>
+      current.map((a) =>
+        a.id === event.appointment.id
+          ? { ...a, start_time: toDateTimeLocal(new Date(start as Date)), end_time: toDateTimeLocal(new Date(end as Date)) }
+          : a,
+      ),
+    )
     const form = buildFormData(event.appointment, start, end)
     const result = await updateAppointment(form)
-    if (!result?.error) {
-      toast.success("Agendamento movido")
-      refreshData()
-    } else {
+    if (result?.error) {
+      setAppointments(prev)
       toast.error(result.error)
+    } else {
+      toast.success("Agendamento movido")
     }
-  }, [refreshData])
+  }, [appointments, checkSlotInHours])
 
   const handleEventResize = useCallback(async ({ event, start, end }: EventInteractionArgs<CalendarEvent>) => {
+    const msg = checkSlotInHours(new Date(start as Date)) || checkSlotInHours(new Date(end as Date))
+    if (msg) {
+      toast.error(msg)
+      return
+    }
+    const prev = [...appointments]
+    setAppointments((current) =>
+      current.map((a) =>
+        a.id === event.appointment.id
+          ? { ...a, start_time: toDateTimeLocal(new Date(start as Date)), end_time: toDateTimeLocal(new Date(end as Date)) }
+          : a,
+      ),
+    )
     const form = buildFormData(event.appointment, start, end)
     const result = await updateAppointment(form)
-    if (!result?.error) {
-      toast.success("Agendamento redimensionado")
-      refreshData()
-    } else {
+    if (result?.error) {
+      setAppointments(prev)
       toast.error(result.error)
+    } else {
+      toast.success("Agendamento redimensionado")
     }
-  }, [refreshData])
+  }, [appointments, checkSlotInHours])
 
   const defaultColor = "#3b82f6"
 
@@ -1086,6 +1148,29 @@ export function AgendaClient() {
       } as React.CSSProperties,
     }
   }, [])
+
+  const slotPropGetter = useCallback((date: Date) => {
+    const dayOfWeek = date.getDay()
+    const hour = date.getHours()
+    const minute = date.getMinutes()
+
+    const dayHours = clinicHours.find((h) => h.day_of_week === dayOfWeek)
+    if (!dayHours || !dayHours.is_open) {
+      return { style: { backgroundColor: "#f0f0f0" } as React.CSSProperties }
+    }
+
+    const slotMinutes = hour * 60 + minute
+    const openParts = dayHours.open_time.split(":").map(Number)
+    const closeParts = dayHours.close_time.split(":").map(Number)
+    const openMinutes = openParts[0] * 60 + openParts[1]
+    const closeMinutes = closeParts[0] * 60 + closeParts[1]
+
+    if (slotMinutes < openMinutes || slotMinutes >= closeMinutes) {
+      return { style: { backgroundColor: "#f0f0f0" } as React.CSSProperties }
+    }
+
+    return {}
+  }, [clinicHours])
 
   const handleNavigate = useCallback((newDate: Date) => {
     setCurrentDate(newDate)
@@ -1258,6 +1343,7 @@ export function AgendaClient() {
               onEventDrop={handleEventDrop}
               onEventResize={handleEventResize}
               eventPropGetter={eventPropGetter}
+              slotPropGetter={slotPropGetter}
               views={{ month: true, week: true, day: true, agenda: true, threeDay: ThreeDayView } as any}
               step={15}
               timeslots={2}
