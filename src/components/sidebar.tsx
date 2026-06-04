@@ -110,6 +110,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
       items: [
         { href: "/confirmacao", label: "Confirmação", icon: CheckCircle as typeof LayoutDashboard },
         { href: "/historico", label: "Histórico de Agendamentos", icon: Clock as typeof LayoutDashboard },
+        { href: "/prescricao", label: "Receituário", icon: FileText as typeof LayoutDashboard },
         ...(isReceptionist ? [] : [{ href: "/anamnese", label: "Anamnese", icon: BookOpen as typeof LayoutDashboard }]),
         ...(isDentist ? [
           { href: "/minhas-anamneses", label: "Minhas Anamneses", icon: FileText as typeof LayoutDashboard },
@@ -167,10 +168,11 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
           <Image src="/assets/tooth-icon.png" alt="Ícone" width={24} height={24} />
         </div>
         <span className={cn(
-          "truncate text-sm font-bold tracking-tight text-sidebar-foreground transition-all duration-300",
+          "truncate font-bold tracking-tight transition-all duration-300",
           collapsed ? "w-0 opacity-0 overflow-hidden" : "w-auto opacity-100",
         )}>
-          AppointDent
+          <span className="text-sidebar-foreground/60">APPOINT</span>
+          <span className="text-sidebar-primary">DENT</span>
         </span>
       </Link>
 
@@ -184,8 +186,14 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
             <div className={cn("h-8 w-full animate-pulse rounded bg-sidebar-foreground/10", collapsed && "hidden")} />
           </div>
         ) : (
-          navSections.map((section) => (
+          navSections.map((section, idx) => (
             <div key={section.label}>
+              {idx > 0 && (
+                <div className={cn(
+                  "mb-3 mt-1 border-t border-sidebar-border transition-opacity duration-300",
+                  collapsed ? "opacity-40" : "opacity-0",
+                )} />
+              )}
               <div className={cn(
                 "px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 transition-all duration-300",
                 collapsed ? "h-0 opacity-0 overflow-hidden py-0" : "h-auto opacity-100",
