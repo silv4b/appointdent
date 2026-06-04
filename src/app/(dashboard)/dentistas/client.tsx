@@ -225,6 +225,7 @@ export function DentistsClient() {
           ...(edit ? [{ name: "id" as const, label: "ID" as const, type: "hidden" as const, defaultValue: edit.id }] : []),
           { name: "name", label: "Nome", required: true, defaultValue: edit?.name ?? "" },
           { name: "specialty", label: "Especialidade", defaultValue: edit?.specialty ?? "" },
+          { name: "cro", label: "CRO", placeholder: "Ex: SP 12345", defaultValue: edit?.cro ?? "" },
           { name: "phone", label: "Telefone", type: "tel" as const, placeholder: "(00) 00000-0000", defaultValue: edit?.phone ?? "" },
           { name: "email", label: "Email", type: "email" as const, placeholder: "email@exemplo.com", defaultValue: edit?.email ?? "" },
         ]}

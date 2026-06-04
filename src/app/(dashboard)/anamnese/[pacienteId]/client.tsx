@@ -41,7 +41,8 @@ import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 import { Database } from "@/types/database"
 import { format } from "date-fns"
-import { ChevronDown, ChevronUp, Eye, FileDown, FileText, GripVertical, Loader2, Maximize2, Minimize2, MoreVertical, Pen, Plus, Stethoscope, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronUp, Eye, FileDown, FileText, GripVertical, Loader2, Maximize2, Minimize2, MoreVertical, Pen, Pill, Plus, Stethoscope, Trash2 } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -64,6 +65,7 @@ interface AnamneseField {
 }
 
 export function PacienteAnamneseClient({ pacienteId, appointmentId, sessionId }: { pacienteId: string; appointmentId?: string; sessionId?: string }) {
+  const router = useRouter()
   const [patient, setPatient] = useState<{ id: string; name: string; email: string | null; phone: string | null; birth_date: string | null; notes: string | null } | null>(null)
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [sessions, setSessions] = useState<AnamneseSession[]>([])
@@ -701,10 +703,16 @@ export function PacienteAnamneseClient({ pacienteId, appointmentId, sessionId }:
                   </p>
                 )}
               </div>
-              <Button variant="outline" size="sm" onClick={() => setFocused(!focused)}>
-                {focused ? <Minimize2 className="mr-1.5 h-4 w-4" /> : <Maximize2 className="mr-1.5 h-4 w-4" />}
-                {focused ? "Sair do modo foco" : "Modo Foco"}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => router.push(`/prescricao/nova?pacienteId=${pacienteId}`)}>
+                  <Pill className="mr-1.5 h-4 w-4" />
+                  Nova Receita
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setFocused(!focused)}>
+                  {focused ? <Minimize2 className="mr-1.5 h-4 w-4" /> : <Maximize2 className="mr-1.5 h-4 w-4" />}
+                  {focused ? "Sair do modo foco" : "Modo Foco"}
+                </Button>
+              </div>
             </div>
           </div>
 
