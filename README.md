@@ -30,8 +30,8 @@ Sistema de agendamento odontológico com gestão de pacientes, dentistas, proced
 
 ### Anamnese Digital
 
-- Formulário inline de anamnese com campos dinâmicos (adicionar/remover/reordenar)
-- **Modelos de Anamnese**: Dentistas criam templates reutilizáveis com campos pré-definidos
+- Formulário inline de anamnese com campos dinâmicos via `DynamicCard` (adicionar/remover/reordenar)
+- **Modelos de Anamnese**: Dentistas criam templates reutilizáveis com campos pré-definidos (também usa `DynamicCard`)
 - Importação de modelo para preenchimento rápido
 - **Modo Foco**: expande o formulário para tela cheia
 - Editor rich-text (Tiptap) no conteúdo dos campos
@@ -39,6 +39,14 @@ Sistema de agendamento odontológico com gestão de pacientes, dentistas, proced
 - Exportação individual ou em lote para **PDF**
 - Histórico de sessões anteriores com busca textual e filtro por data
 - Visualização de sessão completa em dialog
+
+### Prescrições (Receituário)
+
+- CRUD completo de prescrições com lista paginada e busca
+- Criação vinculada a **paciente** e **agendamento**
+- Modal de criação a partir da anamnese (fluxo: agendamento → anamnese → prescrição)
+- Card dinâmico para adicionar/remover medicamentos
+- Exportação para **PDF** com logo da clínica e dados do paciente
 
 ### Histórico do Paciente
 
@@ -77,6 +85,7 @@ Sistema de agendamento odontológico com gestão de pacientes, dentistas, proced
 
 - Tema claro/escuro (next-themes)
 - Componentes shadcn/ui estilizados com CSS variables
+- Componentes reutilizáveis `DynamicField` e `DynamicCard` para formulários com campos configuráveis
 - Diálogos de confirmação em exclusões
 - Toasts de feedback (sucesso/erro) em todas as operações CRUD
 - Selects com busca textual nos campos de paciente, dentista e procedimento
