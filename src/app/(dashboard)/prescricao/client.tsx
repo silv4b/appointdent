@@ -162,30 +162,33 @@ export function PrescricaoClient() {
                   <TableCell>
                     <div className="flex gap-1">
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="icon"
+                        className="h-8 w-8"
                         onClick={() => router.push(`/prescricao/${p.id}`)}
                         title="Ver receita"
                       >
-                        <Eye className="h-4 w-4" />
+                        <Eye className="h-3.5 w-3.5" />
                       </Button>
                       {!isReceptionist && (
                         <>
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="icon"
+                            className="h-8 w-8"
                             onClick={() => router.push(`/prescricao/${p.id}?edit=true`)}
                             title="Editar receita"
                           >
-                            <Pencil className="h-4 w-4" />
+                            <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
                             onClick={() => setDeleteTarget(p)}
                             title="Excluir receita"
                           >
-                            <Trash2 className="h-4 w-4 text-destructive" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </>
                       )}

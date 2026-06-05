@@ -34,7 +34,7 @@ export function DentistsClient() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
+  const [pageSize, setPageSize] = useState(10)
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState("")
   const [sortColumn, setSortColumn] = useState<"name" | "specialty" | "email" | "active">("name")
@@ -190,12 +190,12 @@ export function DentistsClient() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="flex justify-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => { setEdit(d); setOpen(true) }}>
-                        <Pencil className="h-4 w-4" />
+                    <div className="flex gap-1">
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => { setEdit(d); setOpen(true) }}>
+                        <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => setDeleteId(d.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                      <Button variant="outline" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteId(d.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </TableCell>

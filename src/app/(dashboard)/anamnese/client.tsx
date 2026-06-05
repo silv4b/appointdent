@@ -33,9 +33,9 @@ export function AnamneseSearchClient() {
   const [dentists, setDentists] = useState<Dentist[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
+  const [pageSize, setPageSize] = useState(10)
   const [total, setTotal] = useState(0)
-  const [sortColumn, setSortColumn] = useState<"name" | "birth_date">("name")
+  const [sortColumn, setSortColumn] = useState<"name" | "phone" | "birth_date">("name")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc")
   const [userRole, setUserRole] = useState<string | null>(null)
   const [receptionistDentistIds, setReceptionistDentistIds] = useState<string[]>([])
@@ -150,6 +150,9 @@ export function AnamneseSearchClient() {
 
   const sorted = [...patients].sort((a, b) => {
     const dir = sortDir === "asc" ? 1 : -1
+    if (sortColumn === "phone") {
+      return (a.phone ?? "").localeCompare(b.phone ?? "", "pt-BR") * dir
+    }
     if (sortColumn === "birth_date") {
       const aDate = a.birth_date ? new Date(a.birth_date).getTime() : 0
       const bDate = b.birth_date ? new Date(b.birth_date).getTime() : 0
@@ -227,7 +230,16 @@ export function AnamneseSearchClient() {
                   )}
                 </span>
               </TableHead>
-              <TableHead>Telefone</TableHead>
+              <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("phone")}>
+                <span className="flex items-center gap-1">
+                  Telefone
+                  {sortColumn === "phone" ? (
+                    sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                  ) : (
+                    <ArrowUpDown className="h-3 w-3 opacity-30" />
+                  )}
+                </span>
+              </TableHead>
               <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("birth_date")}>
                 <span className="flex items-center gap-1">
                   Data de Nasc.

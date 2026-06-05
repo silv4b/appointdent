@@ -145,8 +145,8 @@ export function ProceduresClient() {
         if (profile?.role === "admin") {
           setUserRole("admin")
           setRequestsLoading(true)
-          getAllProcedureRequests().then((data) => {
-            setRequests(data as RequestRow[])
+          getAllProcedureRequests().then((res) => {
+            if ("data" in res) setRequests(res.data as RequestRow[])
             setRequestsLoading(false)
           })
         }
@@ -237,7 +237,9 @@ export function ProceduresClient() {
     const result = await approveProcedureRequest(form)
     if (result?.error) {
       toast.error(result.error)
-      getAllProcedureRequests().then((data) => setRequests(data as RequestRow[]))
+      getAllProcedureRequests().then((res) => {
+        if ("data" in res) setRequests(res.data as RequestRow[])
+      })
     } else {
       toast.success(`Procedimento "${req.name}" aprovado!`)
       setApproveConfirmId(null)
@@ -257,7 +259,9 @@ export function ProceduresClient() {
     const result = await rejectProcedureRequest(form)
     if (result?.error) {
       toast.error(result.error)
-      getAllProcedureRequests().then((data) => setRequests(data as RequestRow[]))
+      getAllProcedureRequests().then((res) => {
+        if ("data" in res) setRequests(res.data as RequestRow[])
+      })
     } else {
       toast.success("Solicitação rejeitada")
       setRejectOpen(false)
@@ -269,16 +273,16 @@ export function ProceduresClient() {
 
   const refreshPending = async () => {
     setPendingRefreshing(true)
-    const data = await getAllProcedureRequests()
-    setRequests(data as RequestRow[])
+    const res = await getAllProcedureRequests()
+    if ("data" in res) setRequests(res.data as RequestRow[])
     setPendingPage(1)
     setPendingRefreshing(false)
   }
 
   const refreshHistory = async () => {
     setHistoryRefreshing(true)
-    const data = await getAllProcedureRequests()
-    setRequests(data as RequestRow[])
+    const res = await getAllProcedureRequests()
+    if ("data" in res) setRequests(res.data as RequestRow[])
     setHistoryPage(1)
     setHistoryRefreshing(false)
   }
@@ -410,12 +414,12 @@ export function ProceduresClient() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="flex justify-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => { setEdit(p); setOpen(true) }}>
-                        <Pencil className="h-4 w-4" />
+                    <div className="flex gap-1">
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => { setEdit(p); setOpen(true) }}>
+                        <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => setDeleteId(p.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                      <Button variant="outline" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteId(p.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </TableCell>
@@ -568,26 +572,28 @@ export function ProceduresClient() {
                           {new Date(r.created_at).toLocaleDateString("pt-BR")}
                         </TableCell>
                         <TableCell>
-                          <div className="flex justify-center gap-1">
+                          <div className="flex gap-1">
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="icon"
+                              className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200"
                               disabled={actionLoading}
                               onClick={() => setApproveConfirmId(r.id)}
                             >
                               {actionLoading && actionId === r.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
-                                <CheckCircle className="h-4 w-4 text-green-600" />
+                                <CheckCircle className="h-3.5 w-3.5" />
                               )}
                             </Button>
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
                               disabled={actionLoading}
                               onClick={() => setRejectConfirmId(r.id)}
                             >
-                              <XCircle className="h-4 w-4 text-destructive" />
+                              <XCircle className="h-3.5 w-3.5" />
                             </Button>
                           </div>
                         </TableCell>
@@ -703,8 +709,8 @@ export function ProceduresClient() {
                         </TableCell>
                         <TableCell>
                           <div className="flex justify-center">
-                            <Button variant="ghost" size="icon" onClick={() => setDetailRequest(r)}>
-                              <Eye className="h-4 w-4" />
+                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setDetailRequest(r)}>
+                              <Eye className="h-3.5 w-3.5" />
                             </Button>
                           </div>
                         </TableCell>

@@ -5,12 +5,14 @@ import { createClient } from "@/lib/supabase/client"
 import { useCallback, useEffect, useState, type ChangeEvent } from "react"
 import { Building2, Loader2, Mail, User, BadgeInfo, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { DynamicField } from "@/components/dynamic-field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { getClinicSettings, saveClinicSettings } from "@/lib/actions/clinic-settings"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { CropDialog } from "@/components/crop-dialog"
+import { maskPhone, maskCnpj } from "@/lib/utils/masks"
 import type { Database } from "@/types/database"
 
 const ROLE_LABEL: Record<string, string> = {
@@ -20,22 +22,6 @@ const ROLE_LABEL: Record<string, string> = {
 }
 
 type ClinicData = Database["public"]["Tables"]["clinic_settings"]["Row"]
-
-function maskPhone(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 11)
-  if (digits.length <= 2) return `(${digits}`
-  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`
-  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
-}
-
-function maskCnpj(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 14)
-  if (digits.length <= 2) return digits
-  if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`
-  if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`
-  if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`
-  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`
-}
 
 export function PerfilClient() {
   const { user } = useSupabase()
@@ -244,46 +230,80 @@ export function PerfilClient() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2">
-                <Label htmlFor="clinicName">Nome da Clínica</Label>
-                <Input id="clinicName" value={clinicName} onChange={(e) => setClinicName(e.target.value)} placeholder="Ex: Clínica Odontológica Sorriso Perfeito" />
-              </div>
-              <div>
-                <Label htmlFor="clinicStreet">Rua</Label>
-                <Input id="clinicStreet" value={clinicStreet} onChange={(e) => setClinicStreet(e.target.value)} placeholder="Ex: Rua Augusta" />
-              </div>
-              <div>
-                <Label htmlFor="clinicNumber">Número</Label>
-                <Input id="clinicNumber" value={clinicNumber} onChange={(e) => setClinicNumber(e.target.value)} placeholder="Ex: 1500" />
-              </div>
-              <div>
-                <Label htmlFor="clinicNeighborhood">Bairro</Label>
-                <Input id="clinicNeighborhood" value={clinicNeighborhood} onChange={(e) => setClinicNeighborhood(e.target.value)} placeholder="Ex: Consolação" />
-              </div>
-              <div>
-                <Label htmlFor="clinicCity">Cidade</Label>
-                <Input id="clinicCity" value={clinicCity} onChange={(e) => setClinicCity(e.target.value)} placeholder="Ex: São Paulo" />
-              </div>
-              <div>
-                <Label htmlFor="clinicState">Estado</Label>
-                <Input id="clinicState" value={clinicState} onChange={(e) => setClinicState(e.target.value)} placeholder="Ex: SP" maxLength={2} className="uppercase" />
-              </div>
-              <div>
-                <Label htmlFor="clinicEmail">E-mail</Label>
-                <Input id="clinicEmail" type="email" value={clinicEmail} onChange={(e) => setClinicEmail(e.target.value)} placeholder="contato@clinica.com.br" />
-              </div>
-              <div>
-                <Label htmlFor="clinicPhone1">Telefone 1</Label>
-                <Input id="clinicPhone1" value={clinicPhone1} onChange={(e) => setClinicPhone1(maskPhone(e.target.value))} placeholder="(11) 99999-9999" />
-              </div>
-              <div>
-                <Label htmlFor="clinicPhone2">Telefone 2</Label>
-                <Input id="clinicPhone2" value={clinicPhone2} onChange={(e) => setClinicPhone2(maskPhone(e.target.value))} placeholder="(11) 88888-8888" />
-              </div>
-              <div>
-                <Label htmlFor="clinicCnpj">CNPJ</Label>
-                <Input id="clinicCnpj" value={clinicCnpj} onChange={(e) => setClinicCnpj(maskCnpj(e.target.value))} placeholder="00.000.000/0001-00" />
-              </div>
+              <DynamicField
+                type="text"
+                label="Nome da Clínica"
+                value={clinicName}
+                onChange={setClinicName}
+                placeholder="Ex: Clínica Odontológica Sorriso Perfeito"
+                className="sm:col-span-2"
+              />
+              <DynamicField
+                type="text"
+                label="Rua"
+                value={clinicStreet}
+                onChange={setClinicStreet}
+                placeholder="Ex: Rua Augusta"
+              />
+              <DynamicField
+                type="text"
+                label="Número"
+                value={clinicNumber}
+                onChange={setClinicNumber}
+                placeholder="Ex: 1500"
+              />
+              <DynamicField
+                type="text"
+                label="Bairro"
+                value={clinicNeighborhood}
+                onChange={setClinicNeighborhood}
+                placeholder="Ex: Consolação"
+              />
+              <DynamicField
+                type="text"
+                label="Cidade"
+                value={clinicCity}
+                onChange={setClinicCity}
+                placeholder="Ex: São Paulo"
+              />
+              <DynamicField
+                type="text"
+                label="Estado"
+                value={clinicState}
+                onChange={setClinicState}
+                placeholder="Ex: SP"
+                maxLength={2}
+                inputClassName="uppercase"
+              />
+              <DynamicField
+                type="text"
+                label="E-mail"
+                value={clinicEmail}
+                onChange={setClinicEmail}
+                placeholder="contato@clinica.com.br"
+                inputType="email"
+              />
+              <DynamicField
+                type="text"
+                label="Telefone 1"
+                value={clinicPhone1}
+                onChange={(v) => setClinicPhone1(maskPhone(v))}
+                placeholder="(11) 99999-9999"
+              />
+              <DynamicField
+                type="text"
+                label="Telefone 2"
+                value={clinicPhone2}
+                onChange={(v) => setClinicPhone2(maskPhone(v))}
+                placeholder="(11) 88888-8888"
+              />
+              <DynamicField
+                type="text"
+                label="CNPJ"
+                value={clinicCnpj}
+                onChange={(v) => setClinicCnpj(maskCnpj(v))}
+                placeholder="00.000.000/0001-00"
+              />
             </div>
             <div className="flex justify-end">
               <Button onClick={handleSaveClinic} disabled={savingClinic}>

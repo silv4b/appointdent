@@ -15,6 +15,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { DynamicCard } from "@/components/dynamic-card"
+import { DynamicField } from "@/components/dynamic-field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -24,7 +26,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { RichTextEditor } from "@/components/rich-text-editor"
 import {
   Table,
   TableBody,
@@ -37,6 +38,7 @@ import { DataTablePagination } from "@/components/data-table-pagination"
 import { deleteAnamneseSession, getAnamneseForExport, saveAnamneseSession, updateAnamneseSession } from "@/lib/actions/anamnese"
 import { getMyAnamnesisTemplates } from "@/lib/actions/anamnesis-templates"
 import { generateAnamnesePdf } from "@/lib/utils/export-anamnese-pdf"
+import { NULL_UUID } from "@/lib/utils/constants"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 import { Database } from "@/types/database"
@@ -168,13 +170,13 @@ export function PacienteAnamneseClient({ pacienteId, appointmentId, sessionId }:
 
   // Paginação
   const [anamPage, setAnamPage] = useState(1)
-  const [anamPageSize, setAnamPageSize] = useState(20)
+const [anamPageSize, setAnamPageSize] = useState(10)
   const anamTotal = filteredSessions.length
   const anamTotalPages = Math.ceil(anamTotal / anamPageSize)
   const paginatedSessions = filteredSessions.slice((anamPage - 1) * anamPageSize, anamPage * anamPageSize)
 
   const [apptPage, setApptPage] = useState(1)
-  const [apptPageSize, setApptPageSize] = useState(20)
+  const [apptPageSize, setApptPageSize] = useState(10)
   const apptTotal = filteredAppointments.length
   const apptTotalPages = Math.ceil(apptTotal / apptPageSize)
   const paginatedAppointments = filteredAppointments.slice((apptPage - 1) * apptPageSize, apptPage * apptPageSize)
@@ -241,7 +243,7 @@ export function PacienteAnamneseClient({ pacienteId, appointmentId, sessionId }:
           .eq("patient_id", pacienteId)
 
         if (role === "receptionist") {
-          const ids = dentistIds.length > 0 ? dentistIds : ["00000000-0000-0000-0000-000000000000"]
+          const ids = dentistIds.length > 0 ? dentistIds : [NULL_UUID]
           apptsQuery = apptsQuery.in("dentist_id", ids)
           sessionsQuery = sessionsQuery.in("dentist_id", ids)
         }
@@ -298,7 +300,7 @@ export function PacienteAnamneseClient({ pacienteId, appointmentId, sessionId }:
       .eq("patient_id", pacienteId)
 
     if (role === "receptionist") {
-      const ids = dentistIds.length > 0 ? dentistIds : ["00000000-0000-0000-0000-000000000000"]
+      const ids = dentistIds.length > 0 ? dentistIds : [NULL_UUID]
       apptsQuery = apptsQuery.in("dentist_id", ids)
       sessionsQuery = sessionsQuery.in("dentist_id", ids)
     }
@@ -654,7 +656,7 @@ export function PacienteAnamneseClient({ pacienteId, appointmentId, sessionId }:
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-center">
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setViewAppointment(a)} title="Ver detalhes">
+                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setViewAppointment(a)} title="Ver detalhes">
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
                         </div>
@@ -704,7 +706,7 @@ export function PacienteAnamneseClient({ pacienteId, appointmentId, sessionId }:
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => router.push(`/prescricao/nova?pacienteId=${pacienteId}`)}>
+                <Button variant="outline" size="sm" onClick={() => router.push(`/prescricao/nova?pacienteId=${pacienteId}${appointmentId ? `&appointmentId=${appointmentId}` : ""}&returnTo=anamnese`)}>
                   <Pill className="mr-1.5 h-4 w-4" />
                   Nova Receita
                 </Button>
@@ -735,16 +737,14 @@ export function PacienteAnamneseClient({ pacienteId, appointmentId, sessionId }:
                   </Select>
                 </div>
               )}
-              <div className={userRole === "dentist" ? "sm:col-span-2" : ""}>
-                <Label htmlFor="inline-title">Título da Sessão</Label>
-                <Input
-                  id="inline-title"
-                  placeholder="Ex: Sessão de saúde bucal"
-                  value={formTitle}
-                  onChange={(e) => setFormTitle(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
+              <DynamicField
+                type="text"
+                label="Título da Sessão"
+                value={formTitle}
+                onChange={setFormTitle}
+                placeholder="Ex: Sessão de saúde bucal"
+                className={userRole === "dentist" ? "sm:col-span-2" : ""}
+              />
             </div>
 
             <div className="space-y-3">
@@ -763,46 +763,20 @@ export function PacienteAnamneseClient({ pacienteId, appointmentId, sessionId }:
               </div>
 
               {formFields.map((field, i) => (
-                <div key={`${formKey}-${field._id}`} className="rounded-xl border bg-muted/20 p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <GripVertical className="h-4 w-4 text-muted-foreground/40" />
-                      <span className="text-xs font-medium text-muted-foreground">Campo {formFields.length - i}</span>
-                    </div>
-                    {formFields.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setRemovingIndex(i)}
-                        className="h-7 text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <Label className="text-xs">Nome do campo</Label>
-                      <Input
-                        ref={(el) => { fieldInputsRef.current[i] = el }}
-                        placeholder="Ex: Saúde bucal, Histórico familiar..."
-                        value={field.label}
-                        onChange={(e) => updateField(i, "label", e.target.value)}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Conteúdo</Label>
-                      <RichTextEditor
-                        value={field.content}
-                        onChange={(v) => updateField(i, "content", v)}
-                        className="mt-1"
-                        minHeight={focused ? "160px" : "80px"}
-                      />
-                    </div>
-                  </div>
-                </div>
+                <DynamicCard
+                  key={`${formKey}-${field._id}`}
+                  title={`Campo ${formFields.length - i}`}
+                  fields={[
+                    { name: "label", label: "Nome do campo", type: "text", placeholder: "Ex: Saúde bucal, Histórico familiar..." },
+                    { name: "content", label: "Conteúdo", type: "richtext" },
+                  ]}
+                  values={{ label: field.label, content: field.content }}
+                  onChange={(name, value) => updateField(i, name as "label" | "content", value)}
+                  onRemove={() => setRemovingIndex(i)}
+                  canRemove={formFields.length > 1}
+                  inputRefs={{ label: (el) => { fieldInputsRef.current[i] = el } }}
+                  richTextMinHeight={focused ? "160px" : "80px"}
+                />
               ))}
             </div>
 

@@ -117,8 +117,8 @@ export function MeusProcedimentosClient() {
           setLocalDurations(durations)
           setLocalActive(active)
 
-          const reqData = await getMyProcedureRequests(dentist.id)
-          setRequests(reqData as ProcedureRequest[])
+          const res = await getMyProcedureRequests(dentist.id)
+          if ("data" in res) setRequests(res.data as ProcedureRequest[])
         }
 
         setLoading(false)
@@ -177,8 +177,8 @@ export function MeusProcedimentosClient() {
       setRequestDescription("")
       setRequestDuration("30")
       setRequestPrice("")
-      const reqData = await getMyProcedureRequests(dentistId)
-      setRequests(reqData as ProcedureRequest[])
+      const res2 = await getMyProcedureRequests(dentistId)
+      if ("data" in res2) setRequests(res2.data as ProcedureRequest[])
     }
     setRequestSubmitting(false)
   }
@@ -332,8 +332,12 @@ export function MeusProcedimentosClient() {
                   {procSort.key === "description" ? (procSort.dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
                 </button>
               </TableHead>
-              <TableHead className="w-28">Preço (R$)</TableHead>
-              <TableHead className="w-28">Duração (min)</TableHead>
+              <TableHead className="w-28">
+                <span className="flex items-center gap-1">Preço (R$)</span>
+              </TableHead>
+              <TableHead className="w-28">
+                <span className="flex items-center gap-1">Duração (min)</span>
+              </TableHead>
               <TableHead className="w-16" />
             </TableRow>
           </TableHeader>
@@ -349,7 +353,7 @@ export function MeusProcedimentosClient() {
                 const isActive = localActive[p.id] ?? false
                 return (
                   <TableRow key={p.id}>
-                    <TableCell>
+                    <TableCell className="h-12">
                       <input
                         type="checkbox"
                         checked={isActive}
@@ -357,11 +361,11 @@ export function MeusProcedimentosClient() {
                         className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                       />
                     </TableCell>
-                    <TableCell className="font-medium">{p.name}</TableCell>
-                    <TableCell className="max-w-xs truncate text-muted-foreground text-sm">
+                    <TableCell className="h-12 font-medium">{p.name}</TableCell>
+                    <TableCell className="h-12 max-w-xs truncate text-muted-foreground text-sm">
                       {p.description || "—"}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="h-12">
                       <Input
                         type="number"
                         step="0.01"
@@ -372,7 +376,7 @@ export function MeusProcedimentosClient() {
                         disabled={!isActive}
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="h-12">
                       <Input
                         type="number"
                         min="1"
@@ -382,14 +386,15 @@ export function MeusProcedimentosClient() {
                         disabled={!isActive}
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="h-12">
                       <Button
-                        size="sm"
-                        variant="ghost"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
                         disabled={!isActive || saving === p.id}
                         onClick={() => handleSavePrice(p.id)}
                       >
-                        {saving === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                        {saving === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -409,7 +414,7 @@ export function MeusProcedimentosClient() {
           <TableHeader>
             <TableRow>
               <TableHead>
-                <button type="button" className="h-12 inline-flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => { setReqSort((s) => ({ key: "name", dir: s.key === "name" && s.dir === "asc" ? "desc" : "asc" })); setReqPage(1) }}>
+                <button type="button" className="inline-flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => { setReqSort((s) => ({ key: "name", dir: s.key === "name" && s.dir === "asc" ? "desc" : "asc" })); setReqPage(1) }}>
                   Procedimento
                   {reqSort.key === "name" ? (reqSort.dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
                 </button>
@@ -420,10 +425,18 @@ export function MeusProcedimentosClient() {
                   {reqSort.key === "description" ? (reqSort.dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
                 </button>
               </TableHead>
-              <TableHead className="w-24">Duração</TableHead>
-              <TableHead className="w-24">Valor</TableHead>
-              <TableHead className="w-28">Situação</TableHead>
-              <TableHead className="w-32">Data</TableHead>
+              <TableHead className="w-24">
+                <span className="flex items-center gap-1">Duração</span>
+              </TableHead>
+              <TableHead className="w-24">
+                <span className="flex items-center gap-1">Valor</span>
+              </TableHead>
+              <TableHead className="w-28">
+                <span className="flex items-center gap-1">Situação</span>
+              </TableHead>
+              <TableHead className="w-32">
+                <span className="flex items-center gap-1">Data</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -446,7 +459,7 @@ export function MeusProcedimentosClient() {
                         ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(r.price)
                         : "—"}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="h-12">
                       <span className={`inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[r.status] ?? "bg-muted text-muted-foreground"}`}>
                         <StatusIcon className="h-3 w-3" />
                         {STATUS_LABEL[r.status]}

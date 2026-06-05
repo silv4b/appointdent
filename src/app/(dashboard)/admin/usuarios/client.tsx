@@ -360,7 +360,7 @@ export function UsuariosClient() {
   const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
+  const [pageSize, setPageSize] = useState(10)
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState("")
   const [roleFilter, setRoleFilter] = useState("all")
@@ -377,11 +377,12 @@ export function UsuariosClient() {
     const pageSizeNum = ps ?? pageSize
     const res = await getUsers(pageNum, pageSizeNum)
     startTransition(() => {
-      if ("error" in res && res.error) {
-        toast.error(res.error)
+      if ("error" in res) {
+        toast.error(res.error!)
+      } else if (res.data) {
+        setUsers(res.data.data as UserRow[])
+        setTotal(res.data.total)
       }
-      if (res.data) setUsers(res.data as UserRow[])
-      setTotal(res.total)
       setLoading(false)
     })
   }, [page, pageSize])
@@ -553,22 +554,22 @@ export function UsuariosClient() {
                     {new Date(u.created_at).toLocaleDateString("pt-BR")}
                   </TableCell>
                   <TableCell>
-                    <div className="flex justify-center gap-1">
+                    <div className="flex gap-1">
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        className="h-8 w-8"
                         onClick={() => setEditingUser(u)}
                       >
-                        <Pencil className="h-4 w-4" />
+                        <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
                         onClick={() => setDeletingUser(u)}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </TableCell>

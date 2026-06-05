@@ -27,6 +27,7 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { ExternalLink, Search, X } from "lucide-react"
 import Link from "next/link"
+import { NULL_UUID } from "@/lib/utils/constants"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 type Patient = Database["public"]["Tables"]["patients"]["Row"]
@@ -94,7 +95,7 @@ export function HistoricoClient() {
       let idQuery = supabase.from("appointments").select("patient_id")
       if (effectiveDentist) idQuery = idQuery.eq("dentist_id", effectiveDentist)
       if (effectiveDentistIds && effectiveDentistIds.length > 0) idQuery = idQuery.in("dentist_id", effectiveDentistIds)
-      else if (effectiveDentistIds) idQuery = idQuery.eq("dentist_id", "00000000-0000-0000-0000-000000000000")
+      else if (effectiveDentistIds) idQuery = idQuery.eq("dentist_id", NULL_UUID)
       if (start) idQuery = idQuery.gte("start_time", start)
       if (end) idQuery = idQuery.lte("start_time", end)
       const { data } = await idQuery
@@ -104,7 +105,7 @@ export function HistoricoClient() {
     let query = supabase.from("patients").select("*", { count: "exact" }).order("name")
 
     if (patientIds !== null) {
-      query = query.in("id", patientIds.length > 0 ? patientIds : ["00000000-0000-0000-0000-000000000000"])
+      query = query.in("id", patientIds.length > 0 ? patientIds : [NULL_UUID])
     }
 
     if (searchTerm) {

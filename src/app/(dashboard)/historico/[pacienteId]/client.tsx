@@ -25,6 +25,7 @@ import { ptBR } from "date-fns/locale"
 import { ArrowLeft, Eye, FileText, Clock, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
+import { NULL_UUID } from "@/lib/utils/constants"
 import { useCallback, useEffect, useState } from "react"
 
 type Patient = Database["public"]["Tables"]["patients"]["Row"]
@@ -62,11 +63,11 @@ export function PacienteDetailClient({ pacienteId }: DetailClientProps) {
 
   // Paginação
   const [apptPage, setApptPage] = useState(1)
-  const [apptPageSize, setApptPageSize] = useState(20)
+const [apptPageSize, setApptPageSize] = useState(10)
   const paginatedAppointments = appointments.slice((apptPage - 1) * apptPageSize, apptPage * apptPageSize)
 
   const [anamPage, setAnamPage] = useState(1)
-  const [anamPageSize, setAnamPageSize] = useState(20)
+  const [anamPageSize, setAnamPageSize] = useState(10)
   const paginatedAnamneses = anamneses.slice((anamPage - 1) * anamPageSize, anamPage * anamPageSize)
 
   const fetch = useCallback(async () => {
@@ -107,7 +108,7 @@ export function PacienteDetailClient({ pacienteId }: DetailClientProps) {
     } else if (role === "receptionist") {
       apptQuery = receptionistDentistIds.length > 0
         ? apptQuery.in("dentist_id", receptionistDentistIds)
-        : apptQuery.eq("dentist_id", "00000000-0000-0000-0000-000000000000")
+        : apptQuery.eq("dentist_id", NULL_UUID)
     }
 
     const { data: appts } = await apptQuery
@@ -124,7 +125,7 @@ export function PacienteDetailClient({ pacienteId }: DetailClientProps) {
     } else if (role === "receptionist") {
       anamQuery = receptionistDentistIds.length > 0
         ? anamQuery.in("dentist_id", receptionistDentistIds)
-        : anamQuery.eq("dentist_id", "00000000-0000-0000-0000-000000000000")
+        : anamQuery.eq("dentist_id", NULL_UUID)
     }
 
     const { data: anams } = await anamQuery
@@ -240,7 +241,7 @@ export function PacienteDetailClient({ pacienteId }: DetailClientProps) {
                         <TableCell>
                           <div className="flex justify-center">
                             {linked.length === 1 ? (
-                              <Button variant="ghost" size="icon" className="h-7 w-7" title="Ver anamnese" onClick={() => linked[0] && setViewSession(linked[0])}>
+                              <Button variant="outline" size="icon" className="h-8 w-8" title="Ver anamnese" onClick={() => linked[0] && setViewSession(linked[0])}>
                                 <Eye className="h-3.5 w-3.5" />
                               </Button>
                             ) : (
@@ -305,7 +306,7 @@ export function PacienteDetailClient({ pacienteId }: DetailClientProps) {
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-center">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" title="Ver anamnese" onClick={() => setViewSession(a)}>
+                          <Button variant="outline" size="icon" className="h-8 w-8" title="Ver anamnese" onClick={() => setViewSession(a)}>
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
                         </div>

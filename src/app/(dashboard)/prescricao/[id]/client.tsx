@@ -3,11 +3,20 @@
 import { useCallback, useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { format } from "date-fns"
-import { ArrowLeft, Download, Pencil, Plus, Printer, Trash2 } from "lucide-react"
+import { ArrowLeft, Download, FileText, Pencil, Plus, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { DynamicCard } from "@/components/dynamic-card"
+import { DynamicField } from "@/components/dynamic-field"
 import { Input } from "@/components/ui/input"
-import { RichTextEditor } from "@/components/rich-text-editor"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import {
@@ -50,6 +59,7 @@ export function PrescricaoFormClient({
   const [title, setTitle] = useState("")
   const [patientId, setPatientId] = useState("")
   const [patientName, setPatientName] = useState("")
+  const [patientLocked, setPatientLocked] = useState(false)
   const [patientSearch, setPatientSearch] = useState("")
   const [patientResults, setPatientResults] = useState<{ id: string; name: string; phone: string | null }[]>([])
   const [patientOpen, setPatientOpen] = useState(false)
@@ -65,6 +75,8 @@ export function PrescricaoFormClient({
   const [removingMedication, setRemovingMedication] = useState<MedicationField | null>(null)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+  const [linkedAnamnese, setLinkedAnamnese] = useState<{ title: string; fields: { label: string; description?: string; defaultContent?: string; content?: string }[]; notes: string | null; created_at: string; dentists: { name: string } | null } | null>(null)
+  const [anamneseModalOpen, setAnamneseModalOpen] = useState(false)
 
   const supabase = createClient()
 
@@ -85,7 +97,9 @@ export function PrescricaoFormClient({
   }, [supabase])
 
   useEffect(() => {
-    getDentistList().then(setDentists)
+    getDentistList().then((result) => {
+      if ("data" in result) setDentists(result.data ?? [])
+    })
     getClinicSettings().then((result) => {
       if ("data" in result && result.data) setClinic(result.data as Database["public"]["Tables"]["clinic_settings"]["Row"])
     })
@@ -113,17 +127,39 @@ export function PrescricaoFormClient({
           observacao: m.observacao,
         }))
         setMedications(meds)
+        if (data.appointment_id) {
+          supabase
+            .from("anamnese_sessions")
+            .select("title, fields, notes, created_at, dentists(name)")
+            .eq("appointment_id", data.appointment_id)
+            .single()
+            .then(({ data: anamnese }) => {
+              if (anamnese) setLinkedAnamnese(anamnese as any)
+            })
+        }
         setLoading(false)
       })
     } else {
       const prefillPatientId = searchParams.get("pacienteId")
       if (prefillPatientId) {
         setPatientId(prefillPatientId)
+        setPatientLocked(true)
         supabase.from("patients").select("id, name").eq("id", prefillPatientId).single().then(({ data }) => {
           if (data) setPatientName(data.name)
         })
       }
+      const appointmentIdParam = searchParams.get("appointmentId")
       setLoading(false)
+      if (appointmentIdParam) {
+        supabase
+          .from("anamnese_sessions")
+          .select("title, fields, notes, created_at, dentists(name)")
+          .eq("appointment_id", appointmentIdParam)
+          .single()
+          .then(({ data: anamnese }) => {
+            if (anamnese) setLinkedAnamnese(anamnese as any)
+          })
+      }
     }
   }, [prescriptionId, isNew, router, searchParams, supabase])
 
@@ -183,6 +219,8 @@ export function PrescricaoFormClient({
     formData.set("title", title.trim())
     formData.set("patient_id", patientId)
     formData.set("dentist_id", dentistId)
+    const appointmentIdParam = searchParams.get("appointmentId")
+    if (appointmentIdParam) formData.set("appointment_id", appointmentIdParam)
     // Inverter para salvar no banco com o mais novo primeiro
     formData.set("medications", JSON.stringify(filtered.reverse().map((m) => ({
       medicamento: m.medicamento.trim(),
@@ -191,13 +229,19 @@ export function PrescricaoFormClient({
     }))))
     formData.set("general_observations", generalObservations)
 
+    const isReturnToAnamnese = searchParams.get("returnTo") === "anamnese"
+    const returnPacienteId = searchParams.get("pacienteId")
     if (isNew) {
       const result = await savePrescription(formData)
       if (result?.error) {
         toast.error(result.error)
       } else {
         toast.success("Receita cadastrada com sucesso!")
-        router.push("/prescricao")
+        if (isReturnToAnamnese && returnPacienteId) {
+          router.push(`/anamnese/${returnPacienteId}${appointmentIdParam ? `?appointmentId=${appointmentIdParam}` : ""}`)
+        } else {
+          router.push("/prescricao")
+        }
       }
     } else {
       formData.set("id", prescriptionId)
@@ -279,6 +323,7 @@ export function PrescricaoFormClient({
 
   if (!isEditing && prescription) {
     return (
+      <>
       <div className="max-w-3xl mx-auto">
         <div className="mb-6 flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.push("/prescricao")} title="Voltar">
@@ -342,8 +387,51 @@ export function PrescricaoFormClient({
               <div className="text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: prescription.general_observations }} />
             </div>
           )}
+
+          {linkedAnamnese && (
+            <div className="border-t pt-4">
+              <button
+                className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary/80 font-medium"
+                onClick={() => setAnamneseModalOpen(true)}
+              >
+                <FileText className="h-4 w-4" />
+                Anamnese vinculada — {linkedAnamnese.title}
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      <Dialog open={anamneseModalOpen} onOpenChange={setAnamneseModalOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>{linkedAnamnese?.title ?? "Anamnese"}</DialogTitle>
+            <DialogDescription>
+              {linkedAnamnese?.dentists?.name && <>Por {linkedAnamnese.dentists.name} &mdash; </>}
+              {linkedAnamnese?.created_at && format(new Date(linkedAnamnese.created_at), "dd/MM/yyyy")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pr-4 overflow-y-auto max-h-[60vh]">
+              {linkedAnamnese?.fields.map((field, i) => (
+                <div key={i}>
+                  <p className="text-sm font-medium text-muted-foreground">{field.label}</p>
+                  {field.content || field.defaultContent ? (
+                    <div className="text-sm" dangerouslySetInnerHTML={{ __html: field.content || field.defaultContent || "" }} />
+                  ) : (
+                    <p className="text-sm text-muted-foreground">—</p>
+                  )}
+                </div>
+              ))}
+              {linkedAnamnese?.notes && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Observações</p>
+                  <div className="text-sm" dangerouslySetInnerHTML={{ __html: linkedAnamnese.notes }} />
+                </div>
+              )}
+            </div>
+        </DialogContent>
+      </Dialog>
+    </>
     )
   }
 
@@ -365,18 +453,19 @@ export function PrescricaoFormClient({
       </div>
 
       <div className="rounded-lg border bg-card p-6 space-y-6">
-        <div>
-          <label className="text-sm font-medium mb-1.5 block">Título da Receita</label>
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ex: Prescrição pós-operatória"
-          />
-        </div>
+        <DynamicField
+          type="text"
+          label="Título da Receita"
+          value={title}
+          onChange={setTitle}
+          placeholder="Ex: Prescrição pós-operatória"
+        />
 
         <div className="relative">
           <label className="text-sm font-medium mb-1.5 block">Paciente</label>
-          {isNew ? (
+          {patientLocked ? (
+            <p className="text-sm font-medium">{patientName}</p>
+          ) : isNew ? (
             <div className="relative">
               <Input
                 ref={patientSearchRef}
@@ -404,9 +493,6 @@ export function PrescricaoFormClient({
                 <div className="absolute z-10 top-full mt-1 w-full rounded-md border bg-popover p-3 text-sm text-muted-foreground">
                   Nenhum paciente encontrado.
                 </div>
-              )}
-              {patientName && !patientOpen && (
-                <p className="text-xs text-muted-foreground mt-1">{patientId}</p>
               )}
             </div>
           ) : (
@@ -446,37 +532,20 @@ export function PrescricaoFormClient({
           </div>
           <div className="space-y-3">
             {medications.map((med, i) => (
-              <div key={med._id} className="rounded-lg border p-4 space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 space-y-3">
-                    <Input
-                      ref={(el) => { medicationRefs.current[i] = el }}
-                      value={med.medicamento}
-                      onChange={(e) => updateMedication(med._id, "medicamento", e.target.value)}
-                      placeholder="Nome do medicamento"
-                    />
-                    <Input
-                      value={med.dosagem}
-                      onChange={(e) => updateMedication(med._id, "dosagem", e.target.value)}
-                      placeholder="Dosagem (ex: 500mg, 1 comprimido 2x ao dia)"
-                    />
-                    <Input
-                      value={med.observacao}
-                      onChange={(e) => updateMedication(med._id, "observacao", e.target.value)}
-                      placeholder="Observação (opcional)"
-                    />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0 text-destructive"
-                    onClick={() => setRemovingMedication(med)}
-                    title="Remover medicamento"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
+              <DynamicCard
+                key={med._id}
+                title={`Medicamento ${i + 1}`}
+                fields={[
+                  { name: "medicamento", label: "Nome do Medicamento", type: "text", placeholder: "Nome do medicamento", required: true },
+                  { name: "dosagem", label: "Dosagem", type: "text", placeholder: "Dosagem (ex: 500mg, 1 comprimido 2x ao dia)", required: true },
+                  { name: "observacao", label: "Observação", type: "text", placeholder: "Observação (opcional)" },
+                ]}
+                values={{ medicamento: med.medicamento, dosagem: med.dosagem, observacao: med.observacao }}
+                onChange={(name, value) => updateMedication(med._id, name as "medicamento" | "dosagem" | "observacao", value)}
+                onRemove={() => setRemovingMedication(med)}
+                canRemove={medications.length > 1}
+                inputRefs={{ medicamento: (el) => { medicationRefs.current[i] = el } }}
+              />
             ))}
             {medications.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">
@@ -486,15 +555,14 @@ export function PrescricaoFormClient({
           </div>
         </div>
 
-        <div>
-          <label className="text-sm font-medium mb-1.5 block">Observações Gerais</label>
-          <RichTextEditor
-            value={generalObservations}
-            onChange={setGeneralObservations}
-            placeholder="Instruções adicionais para o paciente..."
-            minHeight="120px"
-          />
-        </div>
+        <DynamicField
+          type="richtext"
+          label="Observações Gerais"
+          value={generalObservations}
+          onChange={setGeneralObservations}
+          placeholder="Instruções adicionais para o paciente..."
+          minHeight="120px"
+        />
 
         <div className="flex justify-end gap-2 pt-4 border-t">
           <Button variant="outline" onClick={() => setCancelDialogOpen(true)}>

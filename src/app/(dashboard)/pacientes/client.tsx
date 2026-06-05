@@ -24,6 +24,7 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Plus, Search, Trash2, X } from "lucide-react"
+import { NULL_UUID } from "@/lib/utils/constants"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -36,7 +37,7 @@ export function PatientsClient() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
+  const [pageSize, setPageSize] = useState(10)
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState("")
   const [sortColumn, setSortColumn] = useState<"name" | "cpf" | "email" | "birth_date" | "active">("name")
@@ -72,7 +73,7 @@ export function PatientsClient() {
       query = query.or(`name.ilike.%${searchTerm}%,cpf.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`)
     }
     if (patientIds !== null) {
-      query = query.in("id", patientIds.length > 0 ? patientIds : ["00000000-0000-0000-0000-000000000000"])
+      query = query.in("id", patientIds.length > 0 ? patientIds : [NULL_UUID])
     }
     const { data, count } = await query
       .range((pageNum - 1) * pageSizeNum, pageNum * pageSizeNum - 1)
@@ -241,12 +242,12 @@ export function PatientsClient() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="flex justify-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => { setEdit(p); setOpen(true) }}>
-                        <Pencil className="h-4 w-4" />
+                    <div className="flex gap-1">
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => { setEdit(p); setOpen(true) }}>
+                        <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => setDeleteId(p.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                      <Button variant="outline" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteId(p.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </TableCell>

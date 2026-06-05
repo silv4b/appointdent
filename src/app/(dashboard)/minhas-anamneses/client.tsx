@@ -129,8 +129,8 @@ if ("data" in res) setTemplates(res.data as unknown as Template[])
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-center">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => setDeleteId(t.id)}>
-                        <Trash2 className="h-4 w-4" />
+                      <Button variant="outline" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteId(t.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </TableCell>

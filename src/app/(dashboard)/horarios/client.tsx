@@ -30,6 +30,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Database } from "@/types/database"
 import { Building2, ChevronDown, Clock, Pencil, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
+import { NULL_UUID } from "@/lib/utils/constants"
 import { useCallback, useEffect, useState } from "react"
 
 type Slot = Database["public"]["Tables"]["availability_slots"]["Row"] & {
@@ -338,7 +339,7 @@ export function HorariosClient() {
       if (receptionistDentistIds.length > 0) {
         slotsQuery = slotsQuery.in("dentist_id", receptionistDentistIds)
       } else {
-        slotsQuery = slotsQuery.eq("dentist_id", "00000000-0000-0000-0000-000000000000")
+        slotsQuery = slotsQuery.eq("dentist_id", NULL_UUID)
       }
     }
 

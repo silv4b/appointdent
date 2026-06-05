@@ -57,16 +57,16 @@ export function SolicitacoesClient() {
   const searchRef = useRef<HTMLInputElement>(null)
 
   const fetch = useCallback(async () => {
-    const data = await getPendingProcedureRequests()
-    setRequests(data as PendingRequest[])
+    const res = await getPendingProcedureRequests()
+    if ("data" in res) setRequests(res.data as PendingRequest[])
     setLoading(false)
   }, [])
 
   const refresh = async () => {
     setRefreshing(true)
     setPage(1)
-    const data = await getPendingProcedureRequests()
-    setRequests(data as PendingRequest[])
+    const res = await getPendingProcedureRequests()
+    if ("data" in res) setRequests(res.data as PendingRequest[])
     setRefreshing(false)
   }
 
@@ -202,26 +202,28 @@ export function SolicitacoesClient() {
                     {new Date(r.created_at).toLocaleDateString("pt-BR")}
                   </TableCell>
                   <TableCell>
-                    <div className="flex justify-center gap-1">
+                    <div className="flex gap-1">
                       <Button
-                        variant="ghost"
-                        size="sm"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200"
                         disabled={actionLoading}
                         onClick={() => setApproveConfirmId(r.id)}
                       >
                         {actionLoading && actionId === r.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
-                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <CheckCircle className="h-3.5 w-3.5" />
                         )}
                       </Button>
                       <Button
-                        variant="ghost"
-                        size="sm"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
                         disabled={actionLoading}
                         onClick={() => { setRejectId(r.id); setRejectOpen(true) }}
                       >
-                        <XCircle className="h-4 w-4 text-destructive" />
+                        <XCircle className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </TableCell>

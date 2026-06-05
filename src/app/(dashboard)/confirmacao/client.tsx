@@ -92,11 +92,15 @@ export function ConfirmacaoClient() {
   }, [supabase])
 
   const fetchPending = useCallback(async () => {
-    const [data, dentistsData] = await Promise.all([
+    const [pendingRes, dentistsData] = await Promise.all([
       getPendingAppointments(),
       supabase.from("dentists").select("id, name").eq("active", true).order("name").then((r) => r.data ?? []),
     ])
-    setAppointments(data)
+    if ("error" in pendingRes) {
+      toast.error(pendingRes.error!)
+    } else {
+      setAppointments(pendingRes.data ?? [])
+    }
     setDentists(dentistsData)
     setLoading(false)
   }, [supabase])
@@ -254,7 +258,7 @@ export function ConfirmacaoClient() {
         </p>
       </div>
 
-      <div className="flex gap-4">
+      <div className="flex gap-6">
         <div className="min-w-0 flex-1">
           <div className="rounded-lg border bg-card">
             <div className="flex flex-wrap items-end gap-3 border-b px-4 py-3">
