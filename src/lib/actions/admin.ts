@@ -7,7 +7,7 @@ import { ok, err } from "@/lib/utils/action-response"
 import { translateMessage } from "@/lib/utils/translate-error"
 import { z } from "zod"
 
-export async function getUsers(page = 1, pageSize = 20) {
+export async function getUsers(page = 1, pageSize = 10) {
   try {
     const { supabase, user } = await requireAuth()
 
@@ -18,7 +18,7 @@ export async function getUsers(page = 1, pageSize = 20) {
       .single()
 
     if (roleError || profile?.role !== "admin") {
-      return { data: [], total: 0, error: "Acesso negado" }
+      return err("Acesso negado")
     }
 
     const { data: rpcData, error: rpcError } = await supabase.rpc("listar_usuarios", {
@@ -29,7 +29,7 @@ export async function getUsers(page = 1, pageSize = 20) {
 
     if (!rpcError && rpcData) {
       const rows = rpcData
-      return { data: rows, total: rows[0]?.total ?? 0 }
+      return ok({ data: rows, total: rows[0]?.total ?? 0 })
     }
 
     console.error("RPC listar_usuarios fallback:", rpcError)
@@ -47,7 +47,7 @@ export async function getUsers(page = 1, pageSize = 20) {
       .range(offset, offset + pageSize - 1)
 
     if (rowsError) {
-      return { data: [], total: 0, error: translateMessage(rowsError.message) }
+      return err(translateMessage(rowsError.message))
     }
 
     const data = (rows ?? []).map((p) => ({
@@ -59,10 +59,10 @@ export async function getUsers(page = 1, pageSize = 20) {
       created_at: p.created_at,
     }))
 
-    return { data, total: countResult.count ?? 0 }
+    return ok({ data, total: countResult.count ?? 0 })
   } catch (e) {
     console.error("getUsers exception:", e)
-    return { data: [], total: 0, error: e instanceof Error ? translateMessage(e.message) : "Erro inesperado" }
+    return err(e instanceof Error ? translateMessage(e.message) : "Erro inesperado")
   }
 }
 

@@ -6,23 +6,27 @@ import { ok, err } from "@/lib/utils/action-response"
 import { z } from "zod"
 
 export async function getMyAnamnesisTemplates() {
-  const { supabase, user } = await requireAuth()
+  try {
+    const { supabase, user } = await requireAuth()
 
-  const { data: dentist } = await supabase
-    .from("dentists")
-    .select("id")
-    .eq("profile_id", user.id)
-    .single()
+    const { data: dentist } = await supabase
+      .from("dentists")
+      .select("id")
+      .eq("profile_id", user.id)
+      .single()
 
-  if (!dentist) return err("Perfil de dentista não encontrado")
+    if (!dentist) return err("Perfil de dentista não encontrado")
 
-  const { data } = await supabase
-    .from("anamnesis_templates")
-    .select("*")
-    .eq("dentist_id", dentist.id)
-    .order("created_at", { ascending: false })
+    const { data } = await supabase
+      .from("anamnesis_templates")
+      .select("*")
+      .eq("dentist_id", dentist.id)
+      .order("created_at", { ascending: false })
 
-  return { data: data ?? [] }
+    return ok(data ?? [])
+  } catch {
+    return err("Erro ao buscar modelos")
+  }
 }
 
 export async function createAnamnesisTemplate(formData: FormData) {

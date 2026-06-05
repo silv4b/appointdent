@@ -1,11 +1,12 @@
 "use server"
 
-import { requireAuth, AuthError } from "@/lib/supabase/guard"
+import { requireAuth } from "@/lib/supabase/guard"
 import { revalidatePath } from "next/cache"
 import { format } from "date-fns"
 import { appointmentSchema, appointmentUpdateSchema } from "@/lib/schemas"
 import { ok, err } from "@/lib/utils/action-response"
 import { getUserDentistFilter } from "@/lib/utils/access-filter"
+import { NULL_UUID } from "@/lib/utils/constants"
 import { z } from "zod"
 
 export async function getAppointments(date: string) {
@@ -27,7 +28,7 @@ export async function getAppointments(date: string) {
       if (dentistFilter.length > 0) {
         query = query.in("dentist_id", dentistFilter)
       } else {
-        query = query.eq("dentist_id", "00000000-0000-0000-0000-000000000000")
+        query = query.eq("dentist_id", NULL_UUID)
       }
     }
 
@@ -55,44 +56,15 @@ export async function getPendingAppointments() {
       if (dentistFilter.length > 0) {
         query = query.in("dentist_id", dentistFilter)
       } else {
-        query = query.eq("dentist_id", "00000000-0000-0000-0000-000000000000")
+        query = query.eq("dentist_id", NULL_UUID)
       }
     }
 
     const { data } = await query
 
-    return data ?? []
+    return ok(data ?? [])
   } catch {
-    return []
-  }
-}
-
-export async function getAppointmentsRange(start: string, end: string) {
-  try {
-    const { supabase } = await requireAuth()
-
-    const dentistFilter = await getUserDentistFilter()
-
-    let query = supabase
-      .from("appointments")
-      .select("*, patients(name), dentists(name), procedures(name, color, duration_minutes)")
-      .gte("start_time", start)
-      .lte("start_time", end)
-      .order("start_time")
-
-    if (dentistFilter !== null) {
-      if (dentistFilter.length > 0) {
-        query = query.in("dentist_id", dentistFilter)
-      } else {
-        query = query.eq("dentist_id", "00000000-0000-0000-0000-000000000000")
-      }
-    }
-
-    const { data } = await query
-
-    return data ?? []
-  } catch {
-    return []
+    return err("Erro ao buscar agendamentos pendentes")
   }
 }
 
@@ -153,10 +125,17 @@ async function checkBlockedSlot(
   return null
 }
 
+function extractTime(raw: string): string {
+  // raw pode ser "2026-06-04T16:30" (local) ou "2026-06-04T19:30:00.000Z" (ISO)
+  return raw.slice(11, 16)
+}
+
 async function checkClinicHours(
   supabase: Awaited<ReturnType<typeof import("@/lib/supabase/guard").requireAuth>>["supabase"],
   startTime: string,
   endTime: string,
+  startLocal?: string,
+  endLocal?: string,
 ) {
   const date = new Date(startTime)
   const dayOfWeek = date.getUTCDay()
@@ -171,8 +150,11 @@ async function checkClinicHours(
 
   if (!data.is_open) return "A clínica está fechada neste dia"
 
-  const startTimeOnly = startTime.slice(11, 16)
-  const endTimeOnly = endTime.slice(11, 16)
+  // Usa as strings locais originais do formulário para comparar horários,
+  // pois estão no mesmo fuso horário que clinic_hours (local da clínica).
+  // Fallback para a string ISO caso não tenha sido informada.
+  const startTimeOnly = extractTime(startLocal ?? startTime)
+  const endTimeOnly = extractTime(endLocal ?? endTime)
 
   if (startTimeOnly < data.open_time.slice(0, 5)) {
     return `A clínica abre às ${data.open_time.slice(0, 5)} neste dia`
@@ -190,186 +172,210 @@ export async function searchAppointmentsForReturn(params: {
   dentist_id?: string
   month: string
 }) {
-  const { supabase } = await requireAuth()
+  try {
+    const { supabase } = await requireAuth()
 
-  const { patient_id, dentist_id, month } = params
-  const startOfMonth = `${month}-01T00:00:00Z`
-  const endDate = new Date(new Date(month + "-01").getFullYear(), new Date(month + "-01").getMonth() + 1, 0).getDate()
-  const endOfMonth = `${month}-${String(endDate).padStart(2, "0")}T23:59:59Z`
+    const { patient_id, dentist_id, month } = params
+    const startOfMonth = `${month}-01T00:00:00Z`
+    const endDate = new Date(new Date(month + "-01").getFullYear(), new Date(month + "-01").getMonth() + 1, 0).getDate()
+    const endOfMonth = `${month}-${String(endDate).padStart(2, "0")}T23:59:59Z`
 
-  let query = supabase
-    .from("appointments")
-    .select("*, patients!inner(name), dentists!inner(name), procedures(name, color, duration_minutes)")
-    .gte("start_time", startOfMonth)
-    .lte("start_time", endOfMonth)
-    .order("start_time")
+    let query = supabase
+      .from("appointments")
+      .select("*, patients!inner(name), dentists!inner(name), procedures(name, color, duration_minutes)")
+      .gte("start_time", startOfMonth)
+      .lte("start_time", endOfMonth)
+      .order("start_time")
 
-  if (patient_id) query = query.eq("patient_id", patient_id)
-  if (dentist_id) query = query.eq("dentist_id", dentist_id)
+    if (patient_id) query = query.eq("patient_id", patient_id)
+    if (dentist_id) query = query.eq("dentist_id", dentist_id)
 
-  const { data } = await query
+    const { data } = await query
 
-  return ok(data ?? [])
+    return ok(data ?? [])
+  } catch {
+    return err("Erro ao buscar agendamentos")
+  }
 }
 
 export async function createAppointment(formData: FormData) {
-  const { supabase } = await requireAuth()
+  try {
+    const { supabase } = await requireAuth()
 
-  const raw = Object.fromEntries(formData)
-  const parsed = appointmentSchema.safeParse(raw)
-  if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
+    const raw = Object.fromEntries(formData)
+    const parsed = appointmentSchema.safeParse(raw)
+    if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
 
-  const { patient_id, dentist_id, procedure_id, start_time: startTimeLocal, end_time: endTimeLocal, notes, return_to_id } = parsed.data
+    const { patient_id, dentist_id, procedure_id, start_time: startTimeLocal, end_time: endTimeLocal, notes, return_to_id } = parsed.data
 
-  const startTime = new Date(startTimeLocal).toISOString()
-  let endTime: string
+    const startTime = new Date(startTimeLocal).toISOString()
+    let endTime: string
 
-  if (endTimeLocal) {
-    endTime = new Date(endTimeLocal).toISOString()
-  } else if (procedure_id) {
-    let durationMinutes: number | null = null
+    if (endTimeLocal) {
+      endTime = new Date(endTimeLocal).toISOString()
+    } else if (procedure_id) {
+      let durationMinutes: number | null = null
 
-    const { data: dentistProc } = await supabase
-      .from("dentist_procedures")
-      .select("duration_minutes")
-      .eq("dentist_id", dentist_id)
-      .eq("procedure_id", procedure_id)
-      .single()
-
-    if (dentistProc?.duration_minutes) {
-      durationMinutes = dentistProc.duration_minutes
-    } else {
-      const { data: procedure } = await supabase
-        .from("procedures")
+      const { data: dentistProc } = await supabase
+        .from("dentist_procedures")
         .select("duration_minutes")
-        .eq("id", procedure_id)
+        .eq("dentist_id", dentist_id)
+        .eq("procedure_id", procedure_id)
         .single()
-      durationMinutes = procedure?.duration_minutes ?? null
-    }
 
-    if (durationMinutes) {
-      const start = new Date(startTimeLocal)
-      endTime = new Date(start.getTime() + durationMinutes * 60000).toISOString()
+      if (dentistProc?.duration_minutes) {
+        durationMinutes = dentistProc.duration_minutes
+      } else {
+        const { data: procedure } = await supabase
+          .from("procedures")
+          .select("duration_minutes")
+          .eq("id", procedure_id)
+          .single()
+        durationMinutes = procedure?.duration_minutes ?? null
+      }
+
+      if (durationMinutes) {
+        const start = new Date(startTimeLocal)
+        endTime = new Date(start.getTime() + durationMinutes * 60000).toISOString()
+      } else {
+        endTime = startTime
+      }
     } else {
       endTime = startTime
     }
-  } else {
-    endTime = startTime
-  }
 
-  const conflict = await checkOverlap(supabase, dentist_id, startTime, endTime)
-  if (conflict) return err(conflict)
+    const conflict = await checkOverlap(supabase, dentist_id, startTime, endTime)
+    if (conflict) return err(conflict)
 
-  const blocked = await checkBlockedSlot(supabase, dentist_id, startTime, endTime)
-  if (blocked) return err(blocked)
+    const blocked = await checkBlockedSlot(supabase, dentist_id, startTime, endTime)
+    if (blocked) return err(blocked)
 
-  const clinicError = await checkClinicHours(supabase, startTime, endTime)
-  if (clinicError) return err(clinicError)
+    let endLocal = endTimeLocal
+    if (!endLocal) {
+      const durationMs = new Date(endTime).getTime() - new Date(startTime).getTime()
+      if (durationMs > 0) {
+        const [d, t] = startTimeLocal.split("T")
+        const [h, m] = t.split(":").map(Number)
+        const totalMin = h * 60 + m + Math.round(durationMs / 60000)
+        endLocal = `${d}T${String(Math.floor(totalMin / 60)).padStart(2, "0")}:${String(totalMin % 60).padStart(2, "0")}`
+      } else {
+        endLocal = startTimeLocal
+      }
+    }
+    const clinicError = await checkClinicHours(supabase, startTime, endTime, parsed.data.start_time, endLocal)
+    if (clinicError) return err(clinicError)
 
-  const { error } = await supabase.from("appointments").insert({
-    patient_id,
-    dentist_id,
-    procedure_id: procedure_id || null,
-    start_time: startTime,
-    end_time: endTime,
-    notes: notes || null,
-    status: "pending",
-    return_to_id: return_to_id || null,
-  })
-
-  if (error) return err(error.message)
-  revalidatePath("/agenda")
-  return ok()
-}
-
-export async function confirmAppointment(id: string) {
-  const { supabase } = await requireAuth()
-
-  const { error } = await supabase
-    .from("appointments")
-    .update({ status: "confirmed" })
-    .eq("id", id)
-
-  if (error) return err(error.message)
-  revalidatePath("/agenda")
-  revalidatePath("/confirmacao")
-  return ok()
-}
-
-export async function rejectAppointment(id: string) {
-  const { supabase } = await requireAuth()
-
-  const { error } = await supabase
-    .from("appointments")
-    .update({ status: "cancelled" })
-    .eq("id", id)
-
-  if (error) return err(error.message)
-  revalidatePath("/agenda")
-  revalidatePath("/confirmacao")
-  return ok()
-}
-
-export async function updateAppointment(formData: FormData) {
-  const { supabase } = await requireAuth()
-
-  const raw = Object.fromEntries(formData)
-  const parsed = appointmentUpdateSchema.safeParse(raw)
-  if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
-
-  const { id, patient_id, dentist_id, procedure_id, start_time: startTimeLocal, end_time: endTimeLocal, notes, status, return_to_id } = parsed.data
-
-  const startTime = new Date(startTimeLocal).toISOString()
-  const endTime = endTimeLocal ? new Date(endTimeLocal).toISOString() : startTime
-
-  const conflict = await checkOverlap(supabase, dentist_id, startTime, endTime, id)
-  if (conflict) return err(conflict)
-
-  const blocked = await checkBlockedSlot(supabase, dentist_id, startTime, endTime)
-  if (blocked) return err(blocked)
-
-  const clinicError = await checkClinicHours(supabase, startTime, endTime)
-  if (clinicError) return err(clinicError)
-
-  const { error } = await supabase
-    .from("appointments")
-    .update({
+    const { error } = await supabase.from("appointments").insert({
       patient_id,
       dentist_id,
       procedure_id: procedure_id || null,
       start_time: startTime,
       end_time: endTime,
       notes: notes || null,
-      status: status || "pending",
+      status: "pending",
       return_to_id: return_to_id || null,
     })
-    .eq("id", id)
 
-  if (error) return err(error.message)
-  revalidatePath("/agenda")
-  return ok()
+    if (error) return err(error.message)
+    revalidatePath("/agenda")
+    return ok()
+  } catch {
+    return err("Erro ao criar agendamento")
+  }
 }
 
-export async function updateAppointmentStatus(formData: FormData) {
-  const { supabase } = await requireAuth()
-  const raw = Object.fromEntries(formData)
-  const parsed = z.object({ id: z.string().uuid(), status: z.string().min(1) }).safeParse(raw)
-  if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
+export async function confirmAppointment(id: string) {
+  try {
+    const { supabase } = await requireAuth()
 
-  const { error } = await supabase.from("appointments").update({ status: parsed.data.status }).eq("id", parsed.data.id)
-  if (error) return err(error.message)
-  revalidatePath("/agenda")
-  return ok()
+    const { error } = await supabase
+      .from("appointments")
+      .update({ status: "confirmed" })
+      .eq("id", id)
+
+    if (error) return err(error.message)
+    revalidatePath("/agenda")
+    revalidatePath("/confirmacao")
+    return ok()
+  } catch {
+    return err("Erro ao confirmar agendamento")
+  }
+}
+
+export async function rejectAppointment(id: string) {
+  try {
+    const { supabase } = await requireAuth()
+
+    const { error } = await supabase
+      .from("appointments")
+      .update({ status: "cancelled" })
+      .eq("id", id)
+
+    if (error) return err(error.message)
+    revalidatePath("/agenda")
+    revalidatePath("/confirmacao")
+    return ok()
+  } catch {
+    return err("Erro ao rejeitar agendamento")
+  }
+}
+
+export async function updateAppointment(formData: FormData) {
+  try {
+    const { supabase } = await requireAuth()
+
+    const raw = Object.fromEntries(formData)
+    const parsed = appointmentUpdateSchema.safeParse(raw)
+    if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
+
+    const { id, patient_id, dentist_id, procedure_id, start_time: startTimeLocal, end_time: endTimeLocal, notes, status, return_to_id } = parsed.data
+
+    const startTime = new Date(startTimeLocal).toISOString()
+    const endTime = endTimeLocal ? new Date(endTimeLocal).toISOString() : startTime
+
+    const conflict = await checkOverlap(supabase, dentist_id, startTime, endTime, id)
+    if (conflict) return err(conflict)
+
+    const blocked = await checkBlockedSlot(supabase, dentist_id, startTime, endTime)
+    if (blocked) return err(blocked)
+
+    const clinicError = await checkClinicHours(supabase, startTime, endTime, parsed.data.start_time, parsed.data.end_time || parsed.data.start_time)
+    if (clinicError) return err(clinicError)
+
+    const { error } = await supabase
+      .from("appointments")
+      .update({
+        patient_id,
+        dentist_id,
+        procedure_id: procedure_id || null,
+        start_time: startTime,
+        end_time: endTime,
+        notes: notes || null,
+        status: status || "pending",
+        return_to_id: return_to_id || null,
+      })
+      .eq("id", id)
+
+    if (error) return err(error.message)
+    revalidatePath("/agenda")
+    return ok()
+  } catch {
+    return err("Erro ao atualizar agendamento")
+  }
 }
 
 export async function deleteAppointment(formData: FormData) {
-  const { supabase } = await requireAuth()
-  const raw = Object.fromEntries(formData)
-  const parsed = z.object({ id: z.string().uuid() }).safeParse(raw)
-  if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
+  try {
+    const { supabase } = await requireAuth()
+    const raw = Object.fromEntries(formData)
+    const parsed = z.object({ id: z.string().uuid() }).safeParse(raw)
+    if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
 
-  const { error } = await supabase.from("appointments").delete().eq("id", parsed.data.id)
-  if (error) return err(error.message)
-  revalidatePath("/agenda")
-  return ok()
+    const { error } = await supabase.from("appointments").delete().eq("id", parsed.data.id)
+    if (error) return err(error.message)
+    revalidatePath("/agenda")
+    return ok()
+  } catch {
+    return err("Erro ao excluir agendamento")
+  }
 }

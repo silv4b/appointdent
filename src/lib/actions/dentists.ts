@@ -30,58 +30,70 @@ export async function getDentists() {
 }
 
 export async function createDentist(formData: FormData) {
-  const { supabase } = await requireAuth()
+  try {
+    const { supabase } = await requireAuth()
 
-  const raw = Object.fromEntries(formData)
-  const parsed = dentistSchema.safeParse(raw)
-  if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
+    const raw = Object.fromEntries(formData)
+    const parsed = dentistSchema.safeParse(raw)
+    if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
 
-  const { error } = await supabase.from("dentists").insert({
-    name: parsed.data.name,
-    specialty: parsed.data.specialty || null,
-    cro: parsed.data.cro || null,
-    phone: parsed.data.phone || null,
-    email: parsed.data.email || null,
-  })
+    const { error } = await supabase.from("dentists").insert({
+      name: parsed.data.name,
+      specialty: parsed.data.specialty || null,
+      cro: parsed.data.cro || null,
+      phone: parsed.data.phone || null,
+      email: parsed.data.email || null,
+    })
 
-  if (error) return err(error.message)
-  revalidatePath("/dentistas")
-  return ok()
+    if (error) return err(error.message)
+    revalidatePath("/dentistas")
+    return ok()
+  } catch {
+    return err("Erro ao criar dentista")
+  }
 }
 
 export async function updateDentist(formData: FormData) {
-  const { supabase } = await requireAuth()
-  const raw = Object.fromEntries(formData)
-  const parsed = dentistSchema.extend({ id: z.string().uuid() }).safeParse(raw)
-  if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
+  try {
+    const { supabase } = await requireAuth()
+    const raw = Object.fromEntries(formData)
+    const parsed = dentistSchema.extend({ id: z.string().uuid() }).safeParse(raw)
+    if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
 
-  const { id, ...fields } = parsed.data
+    const { id, ...fields } = parsed.data
 
-  const { error } = await supabase
-    .from("dentists")
-    .update({
-      name: fields.name,
-      specialty: fields.specialty || null,
-      cro: fields.cro || null,
-      phone: fields.phone || null,
-      email: fields.email || null,
-      active: fields.active ?? true,
-    })
-    .eq("id", id)
+    const { error } = await supabase
+      .from("dentists")
+      .update({
+        name: fields.name,
+        specialty: fields.specialty || null,
+        cro: fields.cro || null,
+        phone: fields.phone || null,
+        email: fields.email || null,
+        active: fields.active ?? true,
+      })
+      .eq("id", id)
 
-  if (error) return err(error.message)
-  revalidatePath("/dentistas")
-  return ok()
+    if (error) return err(error.message)
+    revalidatePath("/dentistas")
+    return ok()
+  } catch {
+    return err("Erro ao atualizar dentista")
+  }
 }
 
 export async function deleteDentist(formData: FormData) {
-  const { supabase } = await requireAuth()
-  const raw = Object.fromEntries(formData)
-  const parsed = z.object({ id: z.string().uuid() }).safeParse(raw)
-  if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
+  try {
+    const { supabase } = await requireAuth()
+    const raw = Object.fromEntries(formData)
+    const parsed = z.object({ id: z.string().uuid() }).safeParse(raw)
+    if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
 
-  const { error } = await supabase.from("dentists").delete().eq("id", parsed.data.id)
-  if (error) return err(error.message)
-  revalidatePath("/dentistas")
-  return ok()
+    const { error } = await supabase.from("dentists").delete().eq("id", parsed.data.id)
+    if (error) return err(error.message)
+    revalidatePath("/dentistas")
+    return ok()
+  } catch {
+    return err("Erro ao excluir dentista")
+  }
 }
