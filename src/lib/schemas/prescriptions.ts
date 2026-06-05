@@ -36,5 +36,4 @@ export const prescriptionUpdateSchema = prescriptionSchema.extend({
   ),
 })
 
-export type PrescriptionInput = z.infer<typeof prescriptionSchema>
-export type MedicationField = z.infer<typeof MedicationFieldSchema>
+

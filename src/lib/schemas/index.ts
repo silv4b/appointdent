@@ -90,10 +90,6 @@ export const createUserSchema = z.object({
   path: ["confirmPassword"],
 })
 
-export type PatientInput = z.infer<typeof patientSchema>
-export type QuickPatientInput = z.infer<typeof quickPatientSchema>
-export type DentistInput = z.infer<typeof dentistSchema>
-export type ProcedureInput = z.infer<typeof procedureSchema>
 const AnamneseFieldSchema = z.object({
   label: z.string().min(1).max(200),
   content: z.string().max(10000).default(""),
@@ -154,6 +150,4 @@ export const clinicHoursSchema = z.object({
   is_open: z.preprocess((v) => v === "on" || v === true, z.boolean()),
 })
 
-export type AppointmentInput = z.infer<typeof appointmentSchema>
-export type AvailabilitySlotInput = z.infer<typeof availabilitySlotSchema>
-export type DentistProcedureInput = z.infer<typeof dentistProcedureSchema>
+

@@ -270,44 +270,6 @@ export type Database = {
           },
         ]
       }
-      blocked_slots: {
-        Row: {
-          created_at: string
-          dentist_id: string
-          end_time: string
-          id: string
-          reason: string | null
-          start_time: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          dentist_id: string
-          end_time: string
-          id?: string
-          reason?: string | null
-          start_time: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          dentist_id?: string
-          end_time?: string
-          id?: string
-          reason?: string | null
-          start_time?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "blocked_slots_dentist_id_fkey"
-            columns: ["dentist_id"]
-            isOneToOne: false
-            referencedRelation: "dentists"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       dentist_procedures: {
         Row: {
           active: boolean
