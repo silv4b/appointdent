@@ -1,4 +1,3 @@
-import { createClient } from "@/lib/supabase/server"
 import { requireAuth } from "@/lib/supabase/guard"
 
 export async function getUserDentistFilter(): Promise<string[] | null> {
@@ -40,7 +39,3 @@ export async function getUserDentistFilter(): Promise<string[] | null> {
   }
 }
 
-export async function getServerSupabase() {
-  const { supabase } = await requireAuth()
-  return supabase
-}
