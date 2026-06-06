@@ -36,6 +36,7 @@ yarn-error.log*
 .env.development
 .env.production
 .env.*.local
+.env.local-dev
 
 # netlify
 .netlify
@@ -49,3 +50,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# sql
+
+.sql_scripts/

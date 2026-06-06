@@ -3,14 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "dotenv -e .env.local-dev -- next dev",
+    "dev:cloud": "dotenv -e .env.development -- next dev",
+    "build": "dotenv -e .env.local-dev -- next build",
     "start": "next start",
+    "build:cloud": "dotenv -e .env.development -- next build",
     "lint": "eslint",
     "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\"",
     "test": "jest",
     "test:watch": "jest --watch",
-    "supabase": "supabase migration up && supabase stop && supabase start"
+    "supabase": "supabase migration up && supabase stop && supabase start",
+    "supabase:reset": "supabase db reset"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -49,6 +52,7 @@
     "@types/react": "^19",
     "@types/react-big-calendar": "^1.16.3",
     "@types/react-dom": "^19",
+    "dotenv-cli": "^11.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "eslint-config-prettier": "^10.1.8",
