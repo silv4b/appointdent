@@ -200,7 +200,7 @@ export async function searchAppointmentsForReturn(params: {
 
 export async function createAppointment(formData: FormData) {
   try {
-    const { supabase } = await requireAuth()
+    const { supabase, user } = await requireAuth()
 
     const raw = Object.fromEntries(formData)
     const parsed = appointmentSchema.safeParse(raw)
@@ -265,6 +265,32 @@ export async function createAppointment(formData: FormData) {
     const clinicError = await checkClinicHours(supabase, startTime, endTime, parsed.data.start_time, endLocal)
     if (clinicError) return err(clinicError)
 
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+
+    if (profile?.role !== "admin") {
+      if (profile?.role === "dentist") {
+        const { data: dent } = await supabase
+          .from("dentists")
+          .select("id")
+          .eq("profile_id", user.id)
+          .single()
+        if (!dent || dent.id !== dentist_id) return err("Acesso negado")
+      } else if (profile?.role === "receptionist") {
+        const { data: links } = await supabase
+          .from("receptionist_dentists")
+          .select("dentist_id")
+          .eq("receptionist_id", user.id)
+        const linkedIds = links?.map((l) => l.dentist_id) ?? []
+        if (!linkedIds.includes(dentist_id)) return err("Acesso negado")
+      } else {
+        return err("Acesso negado")
+      }
+    }
+
     const { error } = await supabase.from("appointments").insert({
       patient_id,
       dentist_id,
@@ -284,24 +310,55 @@ export async function createAppointment(formData: FormData) {
   }
 }
 
+async function checkAppointmentAccess(supabase: Awaited<ReturnType<typeof import("@/lib/supabase/server").createClient>>, user: { id: string }, dentistId: string | null): Promise<string | null> {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+
+  if (!profile) return "Acesso negado"
+
+  if (profile.role === "admin") return null
+
+  if (profile.role === "dentist") {
+    const { data: dent } = await supabase
+      .from("dentists")
+      .select("id")
+      .eq("profile_id", user.id)
+      .single()
+    if (!dent || dent.id !== dentistId) return "Acesso negado"
+    return null
+  }
+
+  if (profile.role === "receptionist") {
+    if (!dentistId) return "Acesso negado"
+    const { data: links } = await supabase
+      .from("receptionist_dentists")
+      .select("dentist_id")
+      .eq("receptionist_id", user.id)
+    const linkedIds = links?.map((l) => l.dentist_id) ?? []
+    if (!linkedIds.includes(dentistId)) return "Acesso negado"
+    return null
+  }
+
+  return "Acesso negado"
+}
+
 export async function confirmAppointment(id: string) {
   try {
     const { supabase, user } = await requireAuth()
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
+    const { data: appt } = await supabase
+      .from("appointments")
+      .select("dentist_id")
+      .eq("id", id)
       .single()
 
-    if (profile?.role !== "admin") {
-      const { data: dent } = await supabase
-        .from("dentists")
-        .select("id")
-        .eq("profile_id", user.id)
-        .single()
-      if (!dent) return err("Acesso negado")
-    }
+    if (!appt) return err("Agendamento não encontrado")
+
+    const accessError = await checkAppointmentAccess(supabase, user, appt.dentist_id)
+    if (accessError) return err(accessError)
 
     const { error } = await supabase
       .from("appointments")
@@ -321,20 +378,16 @@ export async function rejectAppointment(id: string) {
   try {
     const { supabase, user } = await requireAuth()
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
+    const { data: appt } = await supabase
+      .from("appointments")
+      .select("dentist_id")
+      .eq("id", id)
       .single()
 
-    if (profile?.role !== "admin") {
-      const { data: dent } = await supabase
-        .from("dentists")
-        .select("id")
-        .eq("profile_id", user.id)
-        .single()
-      if (!dent) return err("Acesso negado")
-    }
+    if (!appt) return err("Agendamento não encontrado")
+
+    const accessError = await checkAppointmentAccess(supabase, user, appt.dentist_id)
+    if (accessError) return err(accessError)
 
     const { error } = await supabase
       .from("appointments")
@@ -354,6 +407,12 @@ export async function updateAppointment(formData: FormData) {
   try {
     const { supabase, user } = await requireAuth()
 
+    const raw = Object.fromEntries(formData)
+    const parsed = appointmentUpdateSchema.safeParse(raw)
+    if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
+
+    const { id, patient_id, dentist_id, procedure_id, start_time: startTimeLocal, end_time: endTimeLocal, notes, status, return_to_id } = parsed.data
+
     const { data: profile } = await supabase
       .from("profiles")
       .select("role")
@@ -361,19 +420,24 @@ export async function updateAppointment(formData: FormData) {
       .single()
 
     if (profile?.role !== "admin") {
-      const { data: dent } = await supabase
-        .from("dentists")
-        .select("id")
-        .eq("profile_id", user.id)
-        .single()
-      if (!dent) return err("Acesso negado")
+      if (profile?.role === "dentist") {
+        const { data: dent } = await supabase
+          .from("dentists")
+          .select("id")
+          .eq("profile_id", user.id)
+          .single()
+        if (!dent || dent.id !== dentist_id) return err("Acesso negado")
+      } else if (profile?.role === "receptionist") {
+        const { data: links } = await supabase
+          .from("receptionist_dentists")
+          .select("dentist_id")
+          .eq("receptionist_id", user.id)
+        const linkedIds = links?.map((l) => l.dentist_id) ?? []
+        if (!linkedIds.includes(dentist_id)) return err("Acesso negado")
+      } else {
+        return err("Acesso negado")
+      }
     }
-
-    const raw = Object.fromEntries(formData)
-    const parsed = appointmentUpdateSchema.safeParse(raw)
-    if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
-
-    const { id, patient_id, dentist_id, procedure_id, start_time: startTimeLocal, end_time: endTimeLocal, notes, status, return_to_id } = parsed.data
 
     const startTime = new Date(startTimeLocal).toISOString()
     const endTime = endTimeLocal ? new Date(endTimeLocal).toISOString() : startTime
@@ -423,19 +487,30 @@ export async function deleteAppointment(formData: FormData) {
       .single()
 
     if (profile?.role !== "admin") {
-      const { data: dent } = await supabase
-        .from("dentists")
-        .select("id")
-        .eq("profile_id", user.id)
-        .single()
-      if (!dent) return err("Acesso negado")
-
       const { data: appt } = await supabase
         .from("appointments")
         .select("dentist_id")
         .eq("id", parsed.data.id)
         .single()
-      if (appt?.dentist_id !== dent.id) return err("Acesso negado")
+      if (!appt) return err("Agendamento não encontrado")
+
+      if (profile?.role === "dentist") {
+        const { data: dent } = await supabase
+          .from("dentists")
+          .select("id")
+          .eq("profile_id", user.id)
+          .single()
+        if (!dent || dent.id !== appt.dentist_id) return err("Acesso negado")
+      } else if (profile?.role === "receptionist") {
+        const { data: links } = await supabase
+          .from("receptionist_dentists")
+          .select("dentist_id")
+          .eq("receptionist_id", user.id)
+        const linkedIds = links?.map((l) => l.dentist_id) ?? []
+        if (!appt.dentist_id || !linkedIds.includes(appt.dentist_id)) return err("Acesso negado")
+      } else {
+        return err("Acesso negado")
+      }
     }
 
     const { error } = await supabase.from("appointments").delete().eq("id", parsed.data.id)
