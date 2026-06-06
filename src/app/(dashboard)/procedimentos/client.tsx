@@ -33,7 +33,8 @@ import {
   approveProcedureRequest,
   rejectProcedureRequest,
 } from "@/lib/actions/procedure-requests"
-import { createClient } from "@/lib/supabase/client"
+import { getUserSessionData } from "@/lib/actions/session"
+import { getProceduresPaginated } from "@/lib/actions/queries"
 import { Database } from "@/types/database"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import {
@@ -51,7 +52,7 @@ import {
   X,
   XCircle,
 } from "lucide-react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
 type Procedure = Database["public"]["Tables"]["procedures"]["Row"]
@@ -114,43 +115,30 @@ export function ProceduresClient() {
   const [pendingSearch, setPendingSearch] = useState("")
   const [historySearch, setHistorySearch] = useState("")
 
-  const fetch = useCallback(async (p?: number, ps?: number, s?: string) => {
-    const pageNum = p ?? page
-    const pageSizeNum = ps ?? pageSize
-    const searchTerm = s ?? search
-    const supabase = createClient()
-    let query = supabase
-      .from("procedures")
-      .select("*", { count: "exact" })
-      .order("name")
-    if (searchTerm) {
-      query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
-    }
-    const { data, count } = await query
-      .range((pageNum - 1) * pageSizeNum, pageNum * pageSizeNum - 1)
-    if (data) setProcedures(data)
-    if (count !== null) setTotal(count)
-    setLoading(false)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const result = await getProceduresPaginated(page, pageSize, search || undefined)
+      if (cancelled) return
+      if ("data" in result) {
+        setProcedures(result.data.data as Procedure[])
+        setTotal(result.data.total)
+      }
+      setLoading(false)
+    })()
+    return () => { cancelled = true }
   }, [page, pageSize, search])
 
   useEffect(() => {
-    fetch()
-  }, [fetch])
-
-  useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-      supabase.from("profiles").select("role").eq("id", user.id).single().then(({ data: profile }) => {
-        if (profile?.role === "admin") {
-          setUserRole("admin")
-          setRequestsLoading(true)
-          getAllProcedureRequests().then((res) => {
-            if ("data" in res) setRequests(res.data as RequestRow[])
-            setRequestsLoading(false)
-          })
-        }
-      })
+    getUserSessionData().then((result) => {
+      if ("data" in result && result.data.role === "admin") {
+        setUserRole("admin")
+        setRequestsLoading(true)
+        getAllProcedureRequests().then((res) => {
+          if ("data" in res) setRequests(res.data as RequestRow[])
+          setRequestsLoading(false)
+        })
+      }
     })
   }, [])
 
@@ -162,7 +150,6 @@ export function ProceduresClient() {
     if (result?.error) {
       toast.error(result.error)
       setPage(1)
-      fetch(1)
     } else {
       toast.success("Procedimento excluído")
     }
@@ -337,14 +324,14 @@ export function ProceduresClient() {
             <Input
               ref={searchRef}
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); setLoading(true); fetch(1, pageSize, e.target.value) }}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); setLoading(true) }}
               placeholder="Buscar procedimentos..."
               className="h-9 pl-9 pr-8"
             />
             {search && (
               <button
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                onClick={() => { setSearch(""); setPage(1); setLoading(true); fetch(1, pageSize, ""); searchRef.current?.focus() }}
+                onClick={() => { setSearch(""); setPage(1); setLoading(true); searchRef.current?.focus() }}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -432,8 +419,8 @@ export function ProceduresClient() {
           page={page}
           pageSize={pageSize}
           total={total}
-          onPageChange={(p) => { setPage(p); fetch(p) }}
-          onPageSizeChange={(s) => { setPageSize(s); setPage(1); fetch(1, s) }}
+          onPageChange={(p) => { setPage(p) }}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
         />
       </div>
 
@@ -441,7 +428,7 @@ export function ProceduresClient() {
         open={open}
         onOpenChange={(o) => {
           setOpen(o)
-          if (!o) { setPage(1); fetch(1) }
+          if (!o) { setPage(1) }
         }}
         title={edit ? "Editar Procedimento" : "Novo Procedimento"}
         description={edit ? "Atualize os dados do procedimento" : "Preencha os dados do novo procedimento"}
@@ -792,7 +779,7 @@ export function ProceduresClient() {
                   {detailRequest.admin && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Revisado por</span>
-                      <span className="font-medium">{detailRequest.admin.name ?? detailRequest.admin_id}</span>
+                      <span className="font-medium">{detailRequest.admin.name ?? "—"}</span>
                     </div>
                   )}
                   <div className="flex justify-between">

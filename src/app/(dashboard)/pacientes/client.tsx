@@ -17,15 +17,14 @@ import {
   createPatient,
   deletePatient,
   updatePatient,
+  getPatientsPaginated,
 } from "@/lib/actions/patients"
-import { createClient } from "@/lib/supabase/client"
 import { Database } from "@/types/database"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Plus, Search, Trash2, X } from "lucide-react"
-import { NULL_UUID } from "@/lib/utils/constants"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
 type Patient = Database["public"]["Tables"]["patients"]["Row"]
@@ -42,63 +41,21 @@ export function PatientsClient() {
   const [search, setSearch] = useState("")
   const [sortColumn, setSortColumn] = useState<"name" | "cpf" | "email" | "birth_date" | "active">("name")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc")
-  const [userRole, setUserRole] = useState<string | null>(null)
-  const [receptionistDentistIds, setReceptionistDentistIds] = useState<string[]>([])
   const searchRef = useRef<HTMLInputElement>(null)
 
-  const fetch = useCallback(async (p?: number, ps?: number, s?: string) => {
-    const pageNum = p ?? page
-    const pageSizeNum = ps ?? pageSize
-    const searchTerm = s ?? search
-    const supabase = createClient()
-
-    let patientIds: string[] | null = null
-    if (userRole === "receptionist") {
-      if (receptionistDentistIds.length > 0) {
-        const { data: appts } = await supabase
-          .from("appointments")
-          .select("patient_id")
-          .in("dentist_id", receptionistDentistIds)
-        patientIds = [...new Set((appts ?? []).map((a) => a.patient_id))]
-      } else {
-        patientIds = []
-      }
-    }
-
-    let query = supabase
-      .from("patients")
-      .select("*", { count: "exact" })
-      .order("name")
-    if (searchTerm) {
-      query = query.or(`name.ilike.%${searchTerm}%,cpf.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`)
-    }
-    if (patientIds !== null) {
-      query = query.in("id", patientIds.length > 0 ? patientIds : [NULL_UUID])
-    }
-    const { data, count } = await query
-      .range((pageNum - 1) * pageSizeNum, pageNum * pageSizeNum - 1)
-    if (data) setPatients(data)
-    if (count !== null) setTotal(count)
-    setLoading(false)
-  }, [page, pageSize, search, userRole, receptionistDentistIds])
-
   useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-      supabase.from("profiles").select("role").eq("id", user.id).single().then(({ data: profile }) => {
-        if (!profile) return
-        setUserRole(profile.role)
-        if (profile.role === "receptionist") {
-          supabase.from("receptionist_dentists").select("dentist_id").eq("receptionist_id", user.id).then(({ data }) => {
-            const ids = data?.map((r) => r.dentist_id) ?? []
-            setReceptionistDentistIds(ids)
-          })
-        }
-      })
-    })
-    fetch()
-  }, [fetch])
+    let cancelled = false
+    ;(async () => {
+      const result = await getPatientsPaginated(page, pageSize, search, sortColumn, sortDir)
+      if (cancelled) return
+      if ("data" in result) {
+        setPatients(result.data.data as Patient[])
+        setTotal(result.data.total)
+      }
+      setLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [page, pageSize, search, sortColumn, sortDir])
 
   const handleDelete = async (id: string) => {
     const form = new FormData()
@@ -108,7 +65,6 @@ export function PatientsClient() {
     if (result?.error) {
       toast.error(result.error)
       setPage(1)
-      fetch(1)
     } else {
       toast.success("Paciente excluído")
     }
@@ -160,14 +116,14 @@ export function PatientsClient() {
             <Input
               ref={searchRef}
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); setLoading(true); fetch(1, pageSize, e.target.value) }}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); setLoading(true) }}
               placeholder="Buscar pacientes..."
               className="h-9 pl-9 pr-8"
             />
             {search && (
               <button
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                onClick={() => { setSearch(""); setPage(1); setLoading(true); fetch(1, pageSize, ""); searchRef.current?.focus() }}
+                onClick={() => { setSearch(""); setPage(1); setLoading(true); searchRef.current?.focus() }}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -260,8 +216,8 @@ export function PatientsClient() {
           page={page}
           pageSize={pageSize}
           total={total}
-          onPageChange={(p) => { setPage(p); fetch(p) }}
-          onPageSizeChange={(s) => { setPageSize(s); setPage(1); fetch(1, s) }}
+          onPageChange={(p) => { setPage(p) }}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
         />
       </div>
 
@@ -269,7 +225,7 @@ export function PatientsClient() {
         open={open}
         onOpenChange={(o) => {
           setOpen(o)
-          if (!o) { setPage(1); fetch(1) }
+          if (!o) { setPage(1) }
         }}
         title={edit ? "Editar Paciente" : "Novo Paciente"}
         description={edit ? "Atualize os dados do paciente" : "Preencha os dados do novo paciente"}

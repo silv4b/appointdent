@@ -18,11 +18,11 @@ import {
   deleteDentist,
   updateDentist,
 } from "@/lib/actions/dentists"
-import { createClient } from "@/lib/supabase/client"
+import { getDentistsPaginated } from "@/lib/actions/queries"
 import { Database } from "@/types/database"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Plus, Search, Trash2, X } from "lucide-react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
 type Dentist = Database["public"]["Tables"]["dentists"]["Row"]
@@ -41,28 +41,19 @@ export function DentistsClient() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc")
   const searchRef = useRef<HTMLInputElement>(null)
 
-  const fetch = useCallback(async (p?: number, ps?: number, s?: string) => {
-    const pageNum = p ?? page
-    const pageSizeNum = ps ?? pageSize
-    const searchTerm = s ?? search
-    const supabase = createClient()
-    let query = supabase
-      .from("dentists")
-      .select("*", { count: "exact" })
-      .order("name")
-    if (searchTerm) {
-      query = query.or(`name.ilike.%${searchTerm}%,specialty.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`)
-    }
-    const { data, count } = await query
-      .range((pageNum - 1) * pageSizeNum, pageNum * pageSizeNum - 1)
-    if (data) setDentists(data)
-    if (count !== null) setTotal(count)
-    setLoading(false)
-  }, [page, pageSize, search])
-
   useEffect(() => {
-    fetch()
-  }, [fetch])
+    let cancelled = false
+    ;(async () => {
+      const result = await getDentistsPaginated(page, pageSize, search || undefined, sortColumn, sortDir)
+      if (cancelled) return
+      if ("data" in result) {
+        setDentists(result.data.data as Dentist[])
+        setTotal(result.data.total)
+      }
+      setLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [page, pageSize, search, sortColumn, sortDir])
 
   const handleDelete = async (id: string) => {
     const form = new FormData()
@@ -72,7 +63,6 @@ export function DentistsClient() {
     if (result?.error) {
       toast.error(result.error)
       setPage(1)
-      fetch(1)
     } else {
       toast.success("Dentista excluído")
     }
@@ -119,14 +109,14 @@ export function DentistsClient() {
             <Input
               ref={searchRef}
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); setLoading(true); fetch(1, pageSize, e.target.value) }}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); setLoading(true) }}
               placeholder="Buscar dentistas..."
               className="h-9 pl-9 pr-8"
             />
             {search && (
               <button
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                onClick={() => { setSearch(""); setPage(1); setLoading(true); fetch(1, pageSize, ""); searchRef.current?.focus() }}
+                onClick={() => { setSearch(""); setPage(1); setLoading(true); searchRef.current?.focus() }}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -208,8 +198,8 @@ export function DentistsClient() {
           page={page}
           pageSize={pageSize}
           total={total}
-          onPageChange={(p) => { setPage(p); fetch(p) }}
-          onPageSizeChange={(s) => { setPageSize(s); setPage(1); fetch(1, s) }}
+          onPageChange={(p) => { setPage(p) }}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
         />
       </div>
 
@@ -217,7 +207,7 @@ export function DentistsClient() {
         open={open}
         onOpenChange={(o) => {
           setOpen(o)
-          if (!o) { setPage(1); fetch(1) }
+          if (!o) { setPage(1) }
         }}
         title={edit ? "Editar Dentista" : "Novo Dentista"}
         description={edit ? "Atualize os dados do dentista" : "Preencha os dados do novo dentista"}

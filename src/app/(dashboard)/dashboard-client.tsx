@@ -1,13 +1,13 @@
 "use client"
 
 import { useSupabase } from "@/components/providers/supabase-provider"
-import { createClient } from "@/lib/supabase/client"
-import { CalendarDays, DollarSign, Eye, Stethoscope, Syringe, TrendingDown, TrendingUp, Users } from "lucide-react"
-import { useCallback, useEffect, useState } from "react"
+import { getUserSessionData } from "@/lib/actions/session"
+import { getDashboardStats } from "@/lib/actions/queries"
+import { CalendarDays, DollarSign, Eye, Stethoscope, Syringe, Users } from "lucide-react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
-import { NULL_UUID } from "@/lib/utils/constants"
+
 import { format } from "date-fns"
-import { ptBR } from "date-fns/locale"
 
 type Stat = {
   label: string
@@ -44,95 +44,41 @@ export function DashboardClient() {
     { label: "Procedimentos", value: "-", change: "", trend: "up", icon: Eye, chartColor: "chart-4" },
   ])
   const [appointments, setAppointments] = useState<RecentAppointment[]>([])
-  const [greeting, setGreeting] = useState("Bom dia")
   const [userRole, setUserRole] = useState<string | null>(null)
   const [dentistId, setDentistId] = useState<string | null>(null)
   const [receptionistDentistIds, setReceptionistDentistIds] = useState<string[]>([])
 
-  useEffect(() => {
-    const hour = new Date().getHours()
-    if (hour < 12) setGreeting("Bom dia")
-    else if (hour < 18) setGreeting("Boa tarde")
-    else setGreeting("Boa noite")
-  }, [])
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite"
 
   useEffect(() => {
-    if (!user) return
-    const supabase = createClient()
-    supabase.from("profiles").select("role").eq("id", user.id).single()
-      .then(async ({ data: profile }) => {
-        if (!profile) return
-        setUserRole(profile.role)
-        if (profile.role === "dentist") {
-          const { data: dentist } = await supabase
-            .from("dentists")
-            .select("id")
-            .eq("profile_id", user.id)
-            .single()
-          if (dentist) setDentistId(dentist.id)
-        } else if (profile.role === "receptionist") {
-          const { data: links } = await supabase
-            .from("receptionist_dentists")
-            .select("dentist_id")
-            .eq("receptionist_id", user.id)
-          setReceptionistDentistIds(links?.map((r) => r.dentist_id) ?? [])
-        }
-      })
+    getUserSessionData().then((result) => {
+      if (!("data" in result)) return
+      const { role, dentistId, receptionistDentistIds } = result.data
+      setUserRole(role)
+      if (role === "dentist" && dentistId) setDentistId(dentistId)
+      else if (role === "receptionist") setReceptionistDentistIds(receptionistDentistIds)
+    })
   }, [user])
 
-  const fetchStats = useCallback(async () => {
-    const supabase = createClient()
-    const today = format(new Date(), "yyyy-MM-dd")
-
-    let apptsQuery = supabase
-      .from("appointments")
-      .select("*", { count: "exact", head: true })
-      .gte("start_time", `${today}T00:00:00Z`)
-      .lte("start_time", `${today}T23:59:59Z`)
-
-    let recentQuery = supabase
-      .from("appointments")
-      .select("*, patients(name), dentists(name), procedures(name, color)")
-      .gte("start_time", `${today}T00:00:00Z`)
-      .lte("start_time", `${today}T23:59:59Z`)
-      .order("start_time")
-      .limit(5)
-
-    if (dentistId) {
-      apptsQuery = apptsQuery.eq("dentist_id", dentistId)
-      recentQuery = recentQuery.eq("dentist_id", dentistId)
-    } else if (userRole === "receptionist") {
-      if (receptionistDentistIds.length > 0) {
-        apptsQuery = apptsQuery.in("dentist_id", receptionistDentistIds)
-        recentQuery = recentQuery.in("dentist_id", receptionistDentistIds)
-      } else {
-        apptsQuery = apptsQuery.eq("dentist_id", NULL_UUID)
-        recentQuery = recentQuery.eq("dentist_id", NULL_UUID)
-      }
-    }
-
-    const [apptsCount, patientsCount, dentistsCount, proceduresCount, appts] = await Promise.all([
-      apptsQuery,
-      supabase.from("patients").select("*", { count: "exact", head: true }).eq("active", true),
-      supabase.from("dentists").select("*", { count: "exact", head: true }).eq("active", true),
-      supabase.from("procedures").select("*", { count: "exact", head: true }).eq("active", true),
-      recentQuery,
-    ])
-
-    setStats([
-      { label: "Agendamentos Hoje", value: String(apptsCount.count ?? 0), change: "", trend: "up", icon: CalendarDays, chartColor: "chart-1" },
-      { label: "Pacientes Ativos", value: String(patientsCount.count ?? 0), change: "", trend: "up", icon: Users, chartColor: "chart-2" },
-      { label: "Dentistas", value: String(dentistsCount.count ?? 0), change: "", trend: "up", icon: Stethoscope, chartColor: "chart-3" },
-      { label: "Procedimentos", value: String(proceduresCount.count ?? 0), change: "", trend: "up", icon: Syringe, chartColor: "chart-4" },
-    ])
-    setAppointments(appts.data as RecentAppointment[] ?? [])
-  }, [dentistId, userRole, receptionistDentistIds])
-
   useEffect(() => {
-    if (user && (userRole !== "dentist" || dentistId)) {
-      fetchStats()
-    }
-  }, [fetchStats, user, userRole, dentistId, receptionistDentistIds])
+    let cancelled = false
+    ;(async () => {
+      if (!user || (userRole === "dentist" && !dentistId)) return
+      const result = await getDashboardStats()
+      if (cancelled) return
+      if (!("data" in result)) return
+      const { appointmentsToday, activePatients, activeDentists, activeProcedures, recentAppointments } = result.data
+      setStats([
+        { label: "Agendamentos Hoje", value: String(appointmentsToday), change: "", trend: "up", icon: CalendarDays, chartColor: "chart-1" },
+        { label: "Pacientes Ativos", value: String(activePatients), change: "", trend: "up", icon: Users, chartColor: "chart-2" },
+        { label: "Dentistas", value: String(activeDentists), change: "", trend: "up", icon: Stethoscope, chartColor: "chart-3" },
+        { label: "Procedimentos", value: String(activeProcedures), change: "", trend: "up", icon: Syringe, chartColor: "chart-4" },
+      ])
+      setAppointments(recentAppointments as RecentAppointment[])
+    })()
+    return () => { cancelled = true }
+  }, [user, userRole, dentistId, receptionistDentistIds])
 
   const userName = user?.user_metadata?.name as string | undefined
 

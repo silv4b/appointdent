@@ -33,34 +33,30 @@ import {
 import {
   createAppointment,
   deleteAppointment,
+  getAgendaData,
   searchAppointmentsForReturn,
   updateAppointment,
 } from "@/lib/actions/appointments"
 import { quickCreatePatient } from "@/lib/actions/patients"
-import { NULL_UUID } from "@/lib/utils/constants"
 import { useLocalStorage } from "@/hooks/use-local-storage"
-import { createClient } from "@/lib/supabase/client"
+import { getUserSessionData } from "@/lib/actions/session"
+import { getClinicHours } from "@/lib/actions/queries"
 import { toast } from "sonner"
 import { Database } from "@/types/database"
 import { cn } from "@/lib/utils"
 import {
   addDays,
   addMonths,
-  eachDayOfInterval,
   endOfMonth,
   endOfWeek,
   format,
   getDay,
-  isSameDay,
-  isSameMonth,
-  isToday,
   startOfMonth,
   startOfWeek,
   subDays,
   subMonths,
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   ChevronDown,
@@ -107,9 +103,9 @@ type Appointment = Database["public"]["Tables"]["appointments"]["Row"] & {
   procedures: { name: string; color: string | null; duration_minutes: number } | null
 }
 
-type Dentist = Database["public"]["Tables"]["dentists"]["Row"]
-type Patient = Database["public"]["Tables"]["patients"]["Row"]
-type Procedure = Database["public"]["Tables"]["procedures"]["Row"]
+type Dentist = { id: string; name: string }
+type Patient = { id: string; name: string }
+type Procedure = { id: string; name: string; color: string | null; duration_minutes: number }
 
 interface CalendarEvent {
   title: string
@@ -118,14 +114,6 @@ interface CalendarEvent {
   allDay?: boolean
   resource?: string
   appointment: Appointment
-}
-
-const STATUS_VARIANTS: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  scheduled: "default",
-  confirmed: "secondary",
-  in_progress: "outline",
-  completed: "outline",
-  cancelled: "destructive",
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -184,44 +172,54 @@ function appendTimezone(val: string): string {
 // ============================================================
 // ThreeDay View (custom view for react-big-calendar)
 // ============================================================
-function ThreeDayView({ date, localizer, min, max, scrollToTime, enableAutoScroll, ...props }: any) {
-  const range = ThreeDayView.range(date, { localizer })
+type LocalizerType = ReturnType<typeof dateFnsLocalizer>
+
+function ThreeDayView({ date, localizer: loc, min, max, scrollToTime, enableAutoScroll, ...props }: {
+  date: Date
+  localizer: LocalizerType
+  min?: Date
+  max?: Date
+  scrollToTime?: Date
+  enableAutoScroll?: boolean
+  [key: string]: unknown
+}) {
+  const range = ThreeDayView.range(date, { localizer: loc })
   return (
     <TimeGrid
       {...props}
       range={range}
       eventOffset={15}
-      localizer={localizer}
-      min={min ?? localizer.startOf(new Date(), 'day')}
-      max={max ?? localizer.endOf(new Date(), 'day')}
-      scrollToTime={scrollToTime ?? localizer.startOf(new Date(), 'day')}
+      localizer={loc}
+      min={min ?? loc.startOf(new Date(), 'day')}
+      max={max ?? loc.endOf(new Date(), 'day')}
+      scrollToTime={scrollToTime ?? loc.startOf(new Date(), 'day')}
       enableAutoScroll={enableAutoScroll ?? true}
     />
   )
 }
 
-ThreeDayView.range = (date: Date, { localizer }: any) => {
-  const start = localizer.add(date, -1, 'day')
-  const end = localizer.add(date, 1, 'day')
-  return localizer.range(start, end)
+ThreeDayView.range = (date: Date, { localizer: loc }: { localizer: LocalizerType }) => {
+  const start = loc.add(date, -1, 'day')
+  const end = loc.add(date, 1, 'day')
+  return loc.range(start, end)
 }
 
-ThreeDayView.navigate = (date: Date, action: string, { localizer }: any) => {
+ThreeDayView.navigate = (date: Date, action: string, { localizer: loc }: { localizer: LocalizerType }) => {
   switch (action) {
     case 'PREV':
-      return localizer.add(date, -3, 'day')
+      return loc.add(date, -3, 'day')
     case 'NEXT':
-      return localizer.add(date, 3, 'day')
+      return loc.add(date, 3, 'day')
     default:
       return date
   }
 }
 
-ThreeDayView.title = (date: Date, { localizer }: any) => {
-  const range = ThreeDayView.range(date, { localizer })
+ThreeDayView.title = (date: Date, { localizer: loc }: { localizer: LocalizerType }) => {
+  const range = ThreeDayView.range(date, { localizer: loc })
   const start = range[0]
   const end = range[range.length - 1]
-  return `${localizer.format(start, 'dd/MM')} - ${localizer.format(end, 'dd/MM')}`
+  return `${loc.format(start, 'dd/MM')} - ${loc.format(end, 'dd/MM')}`
 }
 
 // ============================================================
@@ -323,9 +321,11 @@ function ReturnDialog({
 
   useEffect(() => {
     if (open) {
+      const d = new Date()
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPatientId("")
       setDentistId("")
-      setMonth(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`)
+      setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
       setResults([])
     }
   }, [open])
@@ -504,6 +504,7 @@ function AppointmentDialog({
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPatientSearch("")
       setDentistSearch("")
       setProcedureSearch("")
@@ -522,20 +523,31 @@ function AppointmentDialog({
   const [endTime, setEndTime] = useState(initEnd)
 
   useEffect(() => {
+    const compStart = appointment
+      ? toDateTimeLocal(new Date(appointment.start_time))
+      : `${defaultDate}T${String(defaultHour).padStart(2, "0")}:00`
+    const compEnd = appointment
+      ? toDateTimeLocal(new Date(appointment.end_time))
+      : `${defaultDate}T${String(defaultHour + 1).padStart(2, "0")}:00`
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedProcedure(appointment?.procedure_id ?? "")
     setSelectedDentistId(appointment?.dentist_id ?? "")
-    setStartTime(initStart)
-    setEndTime(initEnd)
+    setStartTime(compStart)
+    setEndTime(compEnd)
   }, [appointment, defaultDate, defaultHour])
 
   const effectiveDentistId = userRole === "dentist" && currentDentistId ? currentDentistId : selectedDentistId
-  const availableProcIds = effectiveDentistId ? (dentistProcedureMap[effectiveDentistId] ?? []) : null
+  const availableProcIds = useMemo(
+    () => effectiveDentistId ? (dentistProcedureMap[effectiveDentistId] ?? []) : null,
+    [effectiveDentistId, dentistProcedureMap],
+  )
 
   useEffect(() => {
     if (availableProcIds && selectedProcedure && !availableProcIds.includes(selectedProcedure)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedProcedure("")
     }
-  }, [effectiveDentistId])
+  }, [effectiveDentistId, availableProcIds, selectedProcedure])
 
   const selectedProc = procedures.find((p) => p.id === selectedProcedure)
 
@@ -544,8 +556,9 @@ function AppointmentDialog({
     const start = new Date(startTime)
     if (isNaN(start.getTime())) return
     const end = new Date(start.getTime() + selectedProc.duration_minutes * 60000)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEndTime(toDateTimeLocal(end))
-  }, [selectedProcedure, startTime])
+  }, [selectedProcedure, startTime, selectedProc])
   const filteredPatients = patients.filter((p) => p.name.toLowerCase().includes(patientSearch.toLowerCase()))
   const filteredDentists = dentists.filter((d) => d.name.toLowerCase().includes(dentistSearch.toLowerCase()))
   const filteredProcedures = procedures.filter((p) => {
@@ -858,85 +871,48 @@ export function AgendaClient() {
   const [clinicHours, setClinicHours] = useState<Database["public"]["Tables"]["clinic_hours"]["Row"][]>([])
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-      supabase.from("profiles").select("role").eq("id", user.id).single().then(async ({ data: profile }) => {
-        const role = profile?.role ?? null
-        setUserRole(role)
+    (async () => {
+      const sessionResult = await getUserSessionData()
+      if (!("data" in sessionResult)) return
 
-        if (role === "dentist") {
-          const { data: dentist } = await supabase
-            .from("dentists")
-            .select("id")
-            .eq("profile_id", user.id)
-            .single()
-          if (dentist) {
-            setCurrentDentistId(dentist.id)
-            setSelectedDentist(dentist.id)
-          }
-        } else if (role === "receptionist") {
-          const { data: links } = await supabase
-            .from("receptionist_dentists")
-            .select("dentist_id")
-            .eq("receptionist_id", user.id)
-          setReceptionistDentistIds(links?.map((r) => r.dentist_id) ?? [])
-        }
+      const { role, dentistId, receptionistDentistIds } = sessionResult.data
+      setUserRole(role)
 
-        const { data: hours } = await supabase
-          .from("clinic_hours")
-          .select("*")
-          .order("day_of_week")
-        setClinicHours(hours ?? [])
+      if (role === "dentist" && dentistId) {
+        setCurrentDentistId(dentistId)
+        setSelectedDentist(dentistId)
+      } else if (role === "receptionist") {
+        setReceptionistDentistIds(receptionistDentistIds)
+      }
 
-        setIsReady(true)
-      })
-    })
+      const hoursResult = await getClinicHours()
+      if ("data" in hoursResult) setClinicHours(hoursResult.data as Database["public"]["Tables"]["clinic_hours"]["Row"][])
+
+      setIsReady(true)
+    })()
   }, [])
 
   const fetchRange = useCallback(async (start: Date, end: Date) => {
-    const supabase = createClient()
     const startStr = toDateInput(start)
     const endStr = toDateInput(end)
 
-    let query = supabase
-      .from("appointments")
-      .select("*, patients(name), dentists(name), procedures(name, color, duration_minutes)")
-      .gte("start_time", `${startStr}T00:00:00Z`)
-      .lte("start_time", `${endStr}T23:59:59Z`)
-      .neq("status", "cancelled")
+    const result = await getAgendaData(`${startStr}T00:00:00Z`, `${endStr}T23:59:59Z`)
+    if (!("data" in result)) return
 
-    if (userRole === "dentist" && currentDentistId) {
-      query = query.eq("dentist_id", currentDentistId)
-    } else if (userRole === "receptionist") {
-      if (receptionistDentistIds.length > 0) {
-        query = query.in("dentist_id", receptionistDentistIds)
-      } else {
-        query = query.eq("dentist_id", NULL_UUID)
-      }
-    }
+    const { appointments, dentists, patients, procedures, dentistProcs, approvedReqs } = result.data
 
-    const [appointmentsData, dentistsData, patientsData, proceduresData, dentistProcsData, approvedReqsData] = await Promise.all([
-      query.order("start_time").then((r) => r.data as Appointment[] ?? []),
-      supabase.from("dentists").select("*").order("name").then((r) => r.data ?? []),
-      supabase.from("patients").select("*").order("name").then((r) => r.data ?? []),
-      supabase.from("procedures").select("*").order("name").then((r) => r.data ?? []),
-      supabase.from("dentist_procedures").select("dentist_id, procedure_id").eq("active", true),
-      supabase.from("procedure_requests").select("dentist_id, created_procedure_id").eq("status", "approved"),
-    ])
-
-    setAppointments(appointmentsData)
-    setDentists(dentistsData)
-    setPatients(patientsData)
-    setProcedures(proceduresData)
+    setAppointments(appointments as Appointment[])
+    setDentists(dentists)
+    setPatients(patients)
+    setProcedures(procedures)
 
     const dpMap: Record<string, string[]> = {}
-    for (const d of dentistsData) dpMap[d.id] = []
-    for (const dp of (dentistProcsData.data ?? [])) {
+    for (const d of dentists) dpMap[d.id] = []
+    for (const dp of dentistProcs) {
       if (!dpMap[dp.dentist_id]) dpMap[dp.dentist_id] = []
       if (!dpMap[dp.dentist_id].includes(dp.procedure_id)) dpMap[dp.dentist_id].push(dp.procedure_id)
     }
-    for (const req of (approvedReqsData.data ?? [])) {
+    for (const req of approvedReqs) {
       if (req.created_procedure_id) {
         if (!dpMap[req.dentist_id]) dpMap[req.dentist_id] = []
         if (!dpMap[req.dentist_id].includes(req.created_procedure_id)) dpMap[req.dentist_id].push(req.created_procedure_id)
@@ -944,7 +920,7 @@ export function AgendaClient() {
     }
     setDentistProcedureMap(dpMap)
     setLoading(false)
-  }, [userRole, currentDentistId, receptionistDentistIds])
+  }, [])
 
   const getVisibleRange = useCallback((date: Date, v: string) => {
     if (v === "month") {
@@ -975,6 +951,7 @@ export function AgendaClient() {
 
   useEffect(() => {
     if (!isReady) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     const range = getVisibleRange(currentDate, view)
     fetchRange(range.start, range.end)
@@ -1194,8 +1171,8 @@ export function AgendaClient() {
   }, [])
 
   const handleViewChange = useCallback((newView: string) => {
-    setView(newView as any as ViewType)
-  }, [])
+    setView(newView as ViewType)
+  }, [setView])
 
   const goToday = () => setCurrentDate(new Date())
   const goPrev = () => {
@@ -1347,7 +1324,7 @@ export function AgendaClient() {
               localizer={localizer}
               culture="pt-BR"
               events={events}
-              view={view as any}
+              view={view as CalendarProps<CalendarEvent>["view"]}
               date={currentDate}
               onNavigate={handleNavigate}
               onView={handleViewChange}
@@ -1361,7 +1338,7 @@ export function AgendaClient() {
               onEventResize={handleEventResize}
               eventPropGetter={eventPropGetter}
               slotPropGetter={slotPropGetter}
-              views={{ month: true, week: true, day: true, agenda: true, threeDay: ThreeDayView } as any}
+              views={{ month: true, week: true, day: true, agenda: true, threeDay: ThreeDayView } as Record<string, boolean | typeof ThreeDayView>}
               step={15}
               timeslots={2}
               scrollToTime={new Date(0, 0, 0, 8, 0, 0)}
