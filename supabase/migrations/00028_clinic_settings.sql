@@ -1,5 +1,5 @@
 CREATE TABLE clinic_settings (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL DEFAULT '',
   street TEXT NOT NULL DEFAULT '',
   number TEXT NOT NULL DEFAULT '',

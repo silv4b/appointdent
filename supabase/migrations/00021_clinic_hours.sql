@@ -1,5 +1,5 @@
 CREATE TABLE clinic_hours (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
   open_time TIME NOT NULL,
   close_time TIME NOT NULL,

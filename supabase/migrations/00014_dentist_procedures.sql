@@ -1,5 +1,5 @@
 CREATE TABLE dentist_procedures (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   dentist_id UUID NOT NULL REFERENCES dentists(id) ON DELETE CASCADE,
   procedure_id UUID NOT NULL REFERENCES procedures(id) ON DELETE CASCADE,
   price DECIMAL(10, 2),

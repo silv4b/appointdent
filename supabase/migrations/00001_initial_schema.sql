@@ -1,5 +1,4 @@
 -- Enable extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "btree_gist";
 
 -- 1. PROFILES (estende auth.users)
@@ -14,7 +13,7 @@ CREATE TABLE profiles (
 
 -- 2. PATIENTS
 CREATE TABLE patients (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   cpf TEXT,
   phone TEXT,
@@ -27,7 +26,7 @@ CREATE TABLE patients (
 
 -- 3. DENTISTS
 CREATE TABLE dentists (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   profile_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
   specialty TEXT,
@@ -40,7 +39,7 @@ CREATE TABLE dentists (
 
 -- 4. PROCEDURES (serviços)
 CREATE TABLE procedures (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   description TEXT,
   duration_minutes INTEGER NOT NULL,
@@ -53,7 +52,7 @@ CREATE TABLE procedures (
 
 -- 5. AVAILABILITY SLOTS (grade de horários)
 CREATE TABLE availability_slots (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   dentist_id UUID NOT NULL REFERENCES dentists(id) ON DELETE CASCADE,
   day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
   start_time TIME NOT NULL,
@@ -65,7 +64,7 @@ CREATE TABLE availability_slots (
 
 -- 6. APPOINTMENTS (agendamentos)
 CREATE TABLE appointments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
   dentist_id UUID NOT NULL REFERENCES dentists(id) ON DELETE CASCADE,
   procedure_id UUID REFERENCES procedures(id) ON DELETE SET NULL,
@@ -84,7 +83,7 @@ CREATE TABLE appointments (
 
 -- 7. BLOCKED SLOTS (bloqueios de horário)
 CREATE TABLE blocked_slots (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   dentist_id UUID NOT NULL REFERENCES dentists(id) ON DELETE CASCADE,
   start_time TIMESTAMPTZ NOT NULL,
   end_time TIMESTAMPTZ NOT NULL,

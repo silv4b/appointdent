@@ -1,7 +1,7 @@
 -- ============================================
 -- Seed: usuário administrador padrão
 -- ============================================
--- Email:    admin@clinicadental.com
+-- Email:    admin@appointdent.com
 -- Senha:    Admin@123456
 -- ============================================
 -- Altere a senha após o primeiro login.
@@ -11,7 +11,7 @@
 DO $$
 DECLARE
   v_user_id UUID;
-  v_email TEXT := 'admin@clinicadental.com';
+  v_email TEXT := 'admin@appointdent.com';
 BEGIN
   -- Só cria se ainda não existir
   IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = v_email) THEN

@@ -25,7 +25,8 @@ FROM (VALUES
 -- 1b. IDENTITIES (necessário para login email/senha no Supabase)
 INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
 SELECT id, id, jsonb_build_object('sub', id, 'email', email), 'email', email, now(), now(), now()
-FROM auth.users;
+FROM auth.users
+ON CONFLICT DO NOTHING;
 
 -- 2. ATUALIZAR ROLES DOS PROFILES (trigger cria como 'receptionist' por padrão)
 UPDATE profiles SET role = 'admin'        WHERE id = (SELECT id FROM auth.users WHERE email = 'admin@odonto.com');

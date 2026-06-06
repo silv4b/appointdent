@@ -1,5 +1,5 @@
 CREATE TABLE anamnesis_templates (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   dentist_id UUID NOT NULL REFERENCES dentists(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   fields JSONB NOT NULL DEFAULT '[]'::jsonb,

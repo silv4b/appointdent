@@ -1,6 +1,6 @@
 -- Create anamnese_sessions table for dentist notes per appointment
 CREATE TABLE anamnese_sessions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
   dentist_id UUID NOT NULL REFERENCES dentists(id) ON DELETE CASCADE,
   patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,

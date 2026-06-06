@@ -1,5 +1,5 @@
 CREATE TABLE receptionist_dentists (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   receptionist_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   dentist_id UUID NOT NULL REFERENCES dentists(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
