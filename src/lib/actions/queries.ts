@@ -40,11 +40,23 @@ export async function getDentistsPaginated(
 export async function getDentistsSimpleList() {
   try {
     const { supabase } = await requireAuth()
-    const { data } = await supabase
+    const dentistFilter = await getUserDentistFilter()
+
+    let query = supabase
       .from("dentists")
       .select("id, name, active")
       .eq("active", true)
       .order("name")
+
+    if (dentistFilter !== null) {
+      if (dentistFilter.length > 0) {
+        query = query.in("id", dentistFilter)
+      } else {
+        query = query.eq("id", NULL_UUID)
+      }
+    }
+
+    const { data } = await query
     return ok(data ?? [])
   } catch {
     return err("Erro ao carregar dentistas")
