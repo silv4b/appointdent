@@ -14,10 +14,19 @@ export async function getDentistsPaginated(
 ) {
   try {
     const { supabase } = await requireAuth()
+    const dentistFilter = await getUserDentistFilter()
 
     let query = supabase
       .from("dentists")
       .select("id, name, specialty, cro, phone, email, active, created_at", { count: "exact" })
+
+    if (dentistFilter !== null) {
+      if (dentistFilter.length > 0) {
+        query = query.in("id", dentistFilter)
+      } else {
+        query = query.eq("id", NULL_UUID)
+      }
+    }
 
     if (search) {
       query = query.or(
