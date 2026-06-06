@@ -14,14 +14,11 @@ import {
 import { DataTablePagination } from "@/components/data-table-pagination"
 import { EntityDialog } from "@/components/entity-dialog"
 import {
-  createDentist,
-  deleteDentist,
   updateDentist,
 } from "@/lib/actions/dentists"
 import { getDentistsPaginated } from "@/lib/actions/queries"
 import { Database } from "@/types/database"
-import { ConfirmDialog } from "@/components/confirm-dialog"
-import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Plus, Search, Trash2, X } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Search, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -31,7 +28,6 @@ export function DentistsClient({ role }: { role: string | null }) {
   const [dentists, setDentists] = useState<Dentist[]>([])
   const [edit, setEdit] = useState<Dentist | null>(null)
   const [open, setOpen] = useState(false)
-  const [deleteId, setDeleteId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -54,19 +50,6 @@ export function DentistsClient({ role }: { role: string | null }) {
     })()
     return () => { cancelled = true }
   }, [page, pageSize, search, sortColumn, sortDir])
-
-  const handleDelete = async (id: string) => {
-    const form = new FormData()
-    form.set("id", id)
-    setDentists(prev => prev.filter(d => d.id !== id))
-    const result = await deleteDentist(form)
-    if (result?.error) {
-      toast.error(result.error)
-      setPage(1)
-    } else {
-      toast.success("Dentista excluído")
-    }
-  }
 
   const toggleSort = (col: typeof sortColumn) => {
     if (sortColumn === col) {
@@ -93,15 +76,9 @@ export function DentistsClient({ role }: { role: string | null }) {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dentistas</h1>
           <p className="mt-1 text-muted-foreground">
-            Gerencie o cadastro de dentistas
+            Visualize os dados profissionais dos dentistas
           </p>
         </div>
-        {role === "admin" && (
-          <Button onClick={() => { setEdit(null); setOpen(true) }}>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Dentista
-          </Button>
-        )}
       </div>
 
       <div className="rounded-lg border bg-card">
@@ -147,6 +124,7 @@ export function DentistsClient({ role }: { role: string | null }) {
                   {sortColumn === "email" ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3" />}
                 </div>
               </TableHead>
+              <TableHead>Usuário</TableHead>
               <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("active")}>
                 <div className="flex items-center gap-1">
                   Ativo
@@ -157,15 +135,15 @@ export function DentistsClient({ role }: { role: string | null }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading ? (
+              {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                   Carregando...
                 </TableCell>
               </TableRow>
             ) : dentists.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                   Nenhum dentista cadastrado.
                 </TableCell>
               </TableRow>
@@ -177,20 +155,20 @@ export function DentistsClient({ role }: { role: string | null }) {
                   <TableCell className="text-muted-foreground">{d.phone ?? "-"}</TableCell>
                   <TableCell className="text-muted-foreground">{d.email ?? "-"}</TableCell>
                   <TableCell>
+                    <Badge variant={d.profile_id ? "default" : "secondary"}>
+                      {d.profile_id ? "Vinculado" : "Sem usuário"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
                     <Badge variant={d.active ? "default" : "secondary"}>
                       {d.active ? "Ativo" : "Inativo"}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      {role !== "receptionist" && (
+                      {role === "admin" && (
                         <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => { setEdit(d); setOpen(true) }}>
                           <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                      {role === "admin" && (
-                        <Button variant="outline" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteId(d.id)}>
-                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       )}
                     </div>
@@ -215,27 +193,19 @@ export function DentistsClient({ role }: { role: string | null }) {
           setOpen(o)
           if (!o) { setPage(1) }
         }}
-        title={edit ? "Editar Dentista" : "Novo Dentista"}
-        description={edit ? "Atualize os dados do dentista" : "Preencha os dados do novo dentista"}
+        title="Editar Dentista"
+        description="Atualize os dados profissionais do dentista"
         fields={[
-          ...(edit ? [{ name: "id" as const, label: "ID" as const, type: "hidden" as const, defaultValue: edit.id }] : []),
+          { name: "id" as const, label: "ID" as const, type: "hidden" as const, defaultValue: edit?.id ?? "" },
           { name: "name", label: "Nome", required: true, defaultValue: edit?.name ?? "" },
           { name: "specialty", label: "Especialidade", defaultValue: edit?.specialty ?? "" },
           { name: "cro", label: "CRO", placeholder: "Ex: SP 12345", defaultValue: edit?.cro ?? "" },
           { name: "phone", label: "Telefone", type: "tel" as const, placeholder: "(00) 00000-0000", defaultValue: edit?.phone ?? "" },
           { name: "email", label: "Email", type: "email" as const, placeholder: "email@exemplo.com", defaultValue: edit?.email ?? "" },
+          { name: "active", label: "Ativo", type: "checkbox" as const, defaultValue: edit?.active ? "on" : "off" },
         ]}
-        action={edit ? updateDentist : createDentist}
-        successMessage={edit ? "Dentista atualizado" : "Dentista cadastrado"}
-      />
-
-      <ConfirmDialog
-        open={deleteId !== null}
-        onOpenChange={() => setDeleteId(null)}
-        title="Excluir Dentista"
-        description="Tem certeza que deseja excluir este dentista? Esta ação não pode ser desfeita."
-        confirmLabel="Excluir"
-        onConfirm={() => { if (deleteId) handleDelete(deleteId) }}
+        action={updateDentist}
+        successMessage="Dentista atualizado"
       />
     </div>
   )

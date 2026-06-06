@@ -29,33 +29,18 @@ export async function getDentists() {
   }
 }
 
-export async function createDentist(formData: FormData) {
-  try {
-    const { supabase } = await requireAuth()
-
-    const raw = Object.fromEntries(formData)
-    const parsed = dentistSchema.safeParse(raw)
-    if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
-
-    const { error } = await supabase.from("dentists").insert({
-      name: parsed.data.name,
-      specialty: parsed.data.specialty || null,
-      cro: parsed.data.cro || null,
-      phone: parsed.data.phone || null,
-      email: parsed.data.email || null,
-    })
-
-    if (error) return err(error.message)
-    revalidatePath("/dentistas")
-    return ok()
-  } catch {
-    return err("Erro ao criar dentista")
-  }
-}
-
 export async function updateDentist(formData: FormData) {
   try {
-    const { supabase } = await requireAuth()
+    const { supabase, user } = await requireAuth()
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+
+    if (profile?.role !== "admin") return err("Acesso negado")
+
     const raw = Object.fromEntries(formData)
     const parsed = dentistSchema.extend({ id: z.string().uuid() }).safeParse(raw)
     if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
@@ -79,29 +64,5 @@ export async function updateDentist(formData: FormData) {
     return ok()
   } catch {
     return err("Erro ao atualizar dentista")
-  }
-}
-
-export async function deleteDentist(formData: FormData) {
-  try {
-    const { supabase, user } = await requireAuth()
-    const raw = Object.fromEntries(formData)
-    const parsed = z.object({ id: z.string().uuid() }).safeParse(raw)
-    if (!parsed.success) return err(parsed.error.issues.map((e) => e.message).join(", "))
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-
-    if (profile?.role !== "admin") return err("Acesso negado")
-
-    const { error } = await supabase.from("dentists").delete().eq("id", parsed.data.id)
-    if (error) return err(error.message)
-    revalidatePath("/dentistas")
-    return ok()
-  } catch {
-    return err("Erro ao excluir dentista")
   }
 }

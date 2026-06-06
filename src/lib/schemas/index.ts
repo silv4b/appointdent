@@ -22,7 +22,7 @@ export const dentistSchema = z.object({
   cro: z.string().max(20).nullable().optional(),
   phone: z.string().max(20).nullable().optional(),
   email: z.string().max(200).nullable().optional(),
-  active: z.boolean().optional(),
+  active: z.preprocess((v) => v === "on" || v === true, z.boolean()).optional(),
 })
 
 export const procedureSchema = z.object({
