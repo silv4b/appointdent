@@ -97,6 +97,8 @@ export function MinhaAgendaClient() {
     getUserSessionData().then((result) => {
       if ("data" in result && result.data.dentistId) {
         setDentistId(result.data.dentistId)
+      } else {
+        setLoading(false)
       }
     })
   }, [])
@@ -105,6 +107,7 @@ export function MinhaAgendaClient() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1)
     if (dentistId) {
+      setLoading(true)
       ;(async () => {
         const result = await getMinhaAgendaAppointments({
           tab,
@@ -123,12 +126,14 @@ export function MinhaAgendaClient() {
           setAppointments([])
           setTotal(0)
         }
+        setLoading(false)
       })()
     }
   }, [tab, patientSearch, procedureSearch, dateFrom, dateTo, statusFilter, dentistId, pageSize])
 
   useEffect(() => {
     if (tab !== "current") {
+      setLoading(true)
       ;(async () => {
         const result = await getMinhaAgendaAppointments({
           tab,
@@ -147,6 +152,7 @@ export function MinhaAgendaClient() {
           setAppointments([])
           setTotal(0)
         }
+        setLoading(false)
       })()
     }
   }, [page, pageSize, tab, patientSearch, procedureSearch, dateFrom, dateTo, statusFilter])
@@ -274,7 +280,9 @@ export function MinhaAgendaClient() {
             onValueChange={(v) => { setStatusFilter(v ?? "all"); handleFilterChange() }}
           >
             <SelectTrigger className="h-9">
-              <SelectValue placeholder="Todos" />
+              <SelectValue placeholder="Todos">
+                {statusFilter === "all" ? "Todos" : STATUS_OPTIONS.find((o) => o.value === statusFilter)?.label ?? statusFilter}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
