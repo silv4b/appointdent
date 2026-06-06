@@ -46,3 +46,61 @@ Both files are saved inside `.db_backups/<AAAA-MM-DD>/`. The directory is gitign
 ## Pagination
 
 All tables in the system (current and future) **must** have pagination on their listing pages. Use server-side pagination with `LIMIT`/`OFFSET` (SQL) or `.range()` (Supabase JS). Default page size: 10 records. Include page size selector (10/20/50/100) and total record count display.
+
+## RLS & Database Security
+
+Toda nova tabela criada no Supabase **deve** seguir estas regras de segurança obrigatoriamente:
+
+### 1. RLS obrigatório
+
+- Toda tabela **deve** ter `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` na migration de criação.
+- Nenhuma tabela pode ficar sem RLS — dados ficam expostos via API REST do Supabase.
+
+### 2. Policies por role
+
+Toda operação (SELECT/INSERT/UPDATE/DELETE) deve ser escopada pelo perfil do usuário usando `public.get_user_role()`:
+
+| Role | SELECT | INSERT | UPDATE | DELETE |
+|------|--------|--------|--------|--------|
+| **admin** | tudo | tudo | tudo | tudo |
+| **dentist** | só o que lhe pertence (`dentist_id` = próprio perfil) | só criando para si | só o que lhe pertence | só o que lhe pertence |
+| **receptionist** | só o que pertence a dentistas vinculados (`receptionist_dentists`) | **nunca** (salvo exceção explícita) | **nunca** (salvo exceção explícita) | **nunca** |
+
+Template padrão de policy:
+
+```sql
+CREATE POLICY "select <table> by scope" ON <table>
+  FOR SELECT
+  USING (
+    public.get_user_role() = 'admin'
+    OR (public.get_user_role() = 'dentist' AND <owner_fk> IN (SELECT id FROM public.dentists WHERE profile_id = auth.uid()))
+    OR (public.get_user_role() = 'receptionist' AND <owner_fk> IN (SELECT <fk> FROM public.receptionist_dentists WHERE receptionist_id = auth.uid()))
+  );
+```
+
+O mesmo padrão se aplica a INSERT (WITH CHECK), UPDATE (USING + WITH CHECK) e DELETE (USING).
+
+### 3. Nunca usar `USING (true)` em SELECT
+
+Select público (`USING (true)`) jamais pode ser usado em tabelas com dados sensíveis. Se um SELECT irrestrito for necessário (ex: tabela de lookup tipo `procedures`), use `auth.role() = 'authenticated'` como mínimo — ao menos exige login.
+
+### 4. Atenção ao nome das policies ao dropar
+
+Quando uma migration anterior renomeou policies, o nome antigo usado num `DROP POLICY` pode não funcionar. Sempre verifique o nome atual da policy em `pg_policies` antes de dropar. Use `DROP POLICY IF EXISTS "<nome_exato>" ON <tabela>`.
+
+### 5. Policies conflitantes (OR)
+
+RLS faz **OR** entre policies do mesmo comando numa tabela. Se você criar uma policy restritiva sem dropar a permissiva anterior, a permissiva ainda vale. Sempre drope a antiga ao substituir.
+
+### 6. Server actions como camada extra
+
+Toda query a dados do Supabase deve passar por server actions (`"use server"` em `src/lib/actions/`), não por `createClient()` direto no cliente. Exceção única: canais real-time (WebSocket), que precisam do client-side.
+
+### 7. Revisão ao adicionar feature
+
+Ao criar uma nova tabela ou adicionar uma operação numa tabela existente:
+
+1. Adicione RLS + policies na mesma migration
+2. Siga o template de escopo por role
+3. Verifique se não há policies antigas conflitando (use `pg_policies`)
+4. Teste a migration localmente com `npx supabase migration up`
