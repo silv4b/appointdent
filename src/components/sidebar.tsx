@@ -20,9 +20,11 @@ import {
   CheckCircle,
   ClipboardList,
   Clock,
+  DollarSign,
   FileText,
   LayoutDashboard,
   LogOut,
+  PlaySquare,
   Shield,
   Stethoscope,
   Syringe,
@@ -97,6 +99,10 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
           : []
         ),
         { href: "/agenda", label: "Agenda Geral", icon: Calendar as typeof LayoutDashboard },
+        ...(isDentist || isAdmin
+          ? [{ href: "/atendimentos", label: "Atendimentos", icon: PlaySquare as typeof LayoutDashboard }]
+          : []
+        ),
       ],
     },
     {
@@ -110,6 +116,12 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
           { href: "/minhas-anamneses", label: "Minhas Anamneses", icon: FileText as typeof LayoutDashboard },
           { href: "/meus-procedimentos", label: "Meus Procedimentos", icon: Syringe as typeof LayoutDashboard },
         ] : []),
+      ],
+    },
+    {
+      label: "Financeiro",
+      items: [
+        { href: "/financeiro", label: "Financeiro", icon: DollarSign as typeof LayoutDashboard },
       ],
     },
     ...(isDentist && !isAdmin ? [] : [{
@@ -170,7 +182,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
         </span>
       </Link>
 
-      <nav className="flex-1 space-y-3 overflow-y-auto px-2 py-4">
+      <nav className="flex-1 overflow-y-auto px-2 py-4">
         {role === null ? (
           <div className="space-y-2 px-3">
             <div className={cn("h-3 w-20 animate-pulse rounded bg-sidebar-foreground/10", collapsed && "hidden")} />
@@ -184,12 +196,12 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
             <div key={section.label}>
               {idx > 0 && (
                 <div className={cn(
-                  "mb-3 mt-1 border-t border-sidebar-border transition-opacity duration-300",
+                  "mb-2 mt-2 border-t border-sidebar-border transition-opacity duration-300",
                   collapsed ? "opacity-40" : "opacity-0",
                 )} />
               )}
               <div className={cn(
-                "px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 transition-all duration-300",
+                "px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/50 transition-all duration-300",
                 collapsed ? "h-0 opacity-0 overflow-hidden py-0" : "h-auto opacity-100",
               )}>
                 {section.label}
