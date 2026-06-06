@@ -43,7 +43,7 @@ function parseHtml(html: string): HtmlSegment[] {
   const segments: HtmlSegment[] = []
 
   // Normalize line breaks
-  let content = html
+  const content = html
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/p>/gi, "\n\n")
     .replace(/<\/li>/gi, "\n")

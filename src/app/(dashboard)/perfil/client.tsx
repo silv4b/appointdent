@@ -1,13 +1,11 @@
 "use client"
 
 import { useSupabase } from "@/components/providers/supabase-provider"
-import { createClient } from "@/lib/supabase/client"
-import { useCallback, useEffect, useState, type ChangeEvent } from "react"
+import { getUserSessionData } from "@/lib/actions/session"
+import { useCallback, useEffect, useState } from "react"
 import { Building2, Loader2, Mail, User, BadgeInfo, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DynamicField } from "@/components/dynamic-field"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { getClinicSettings, saveClinicSettings } from "@/lib/actions/clinic-settings"
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -28,7 +26,7 @@ export function PerfilClient() {
   const [role, setRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const [clinic, setClinic] = useState<ClinicData | null>(null)
+  const [, setClinic] = useState<ClinicData | null>(null)
   const [clinicId, setClinicId] = useState("")
   const [clinicName, setClinicName] = useState("")
   const [clinicStreet, setClinicStreet] = useState("")
@@ -45,16 +43,12 @@ export function PerfilClient() {
   const [confirmRemoveLogo, setConfirmRemoveLogo] = useState(false)
   const [savingClinic, setSavingClinic] = useState(false)
 
-  const supabase = createClient()
-
   useEffect(() => {
-    if (!user) { setLoading(false); return }
-    supabase.from("profiles").select("role").eq("id", user.id).single()
-      .then(({ data: profile }) => {
-        if (profile) setRole(profile.role)
-        setLoading(false)
-      })
-  }, [user, supabase])
+    getUserSessionData().then((result) => {
+      if ("data" in result) setRole(result.data.role)
+      setLoading(false)
+    })
+  }, [user])
 
   useEffect(() => {
     if (role !== "admin") return
@@ -187,6 +181,7 @@ export function PerfilClient() {
               <div className="flex items-center gap-4 pb-2">
                 <div className="h-20 w-20 rounded-lg border bg-muted/30 flex items-center justify-center overflow-hidden shrink-0">
                   {clinicLogo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={clinicLogo} alt="Logo" className="h-full w-full object-cover" />
                   ) : (
                   <Building2 className="h-8 w-8 text-muted-foreground/40" />

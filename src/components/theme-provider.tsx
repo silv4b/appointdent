@@ -5,7 +5,7 @@ import { type ReactNode } from "react"
 
 if (typeof window !== "undefined") {
   const original = console.error
-  const patched = (...args: any[]) => {
+  const patched = (...args: unknown[]) => {
     if (
       typeof args[0] === "string" &&
       args[0].includes("Encountered a script tag while rendering")

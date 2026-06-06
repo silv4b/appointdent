@@ -1,11 +1,8 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
 import { useSupabase } from "@/components/providers/supabase-provider"
 import { useTheme } from "next-themes"
-import Link from "next/link"
 import { Bell, Moon, PanelLeftClose, PanelLeftOpen, Sun } from "lucide-react"
-import { useEffect, useState } from "react"
 
 interface DashboardHeaderProps {
   collapsed?: boolean
@@ -15,11 +12,6 @@ interface DashboardHeaderProps {
 export function DashboardHeader({ collapsed, onToggleCollapse }: DashboardHeaderProps) {
   const { user } = useSupabase()
   const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   const userName = user?.user_metadata?.name as string | undefined
   const userEmail = user?.email
@@ -62,7 +54,7 @@ export function DashboardHeader({ collapsed, onToggleCollapse }: DashboardHeader
             className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
           >
-            {mounted && theme === "dark" ? (
+            {theme === "dark" ? (
               <Sun className="h-4 w-4" />
             ) : (
               <Moon className="h-4 w-4" />

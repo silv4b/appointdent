@@ -79,11 +79,12 @@ function CriarUsuarioDialog({
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDentistIds([])
       const supabase = createClient()
       supabase.from("dentists").select("id, name").eq("active", true).order("name").then(({ data }) => {
         if (data) setDentists(data)
       })
-      setDentistIds([])
     }
   }, [open])
 

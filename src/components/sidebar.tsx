@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { logout } from "@/lib/supabase/actions"
 import { cn } from "@/lib/utils"
 import { useSupabase } from "@/components/providers/supabase-provider"
-import { createClient } from "@/lib/supabase/client"
+import { getUserSessionData } from "@/lib/actions/session"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -65,7 +65,7 @@ interface SidebarProps {
   onToggleCollapse?: () => void
 }
 
-export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
+export function Sidebar({ collapsed = false }: SidebarProps) {
   const pathname = usePathname()
   const { user } = useSupabase()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -73,16 +73,9 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user: currentUser } }) => {
-      if (!currentUser) {
-        setRole(null)
-        return
-      }
-      supabase.from("profiles").select("role").eq("id", currentUser.id).single().then(({ data, error }) => {
-        if (data) setRole(data.role)
-        else console.error("Erro ao carregar perfil:", error?.message)
-      })
+    getUserSessionData().then((result) => {
+      if ("data" in result) setRole(result.data.role)
+      else setRole(null)
     })
   }, [user])
 

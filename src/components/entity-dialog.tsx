@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useActionState, useEffect, useState } from "react"
+import { useActionState, useState } from "react"
 import { toast } from "sonner"
 
 export interface Field {

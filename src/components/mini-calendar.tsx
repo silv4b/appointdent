@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useMemo } from "react"
 import { format } from "date-fns"
 import {
   startOfMonth,
@@ -32,11 +32,7 @@ interface MiniCalendarProps {
 }
 
 export function MiniCalendar({ currentDate, onSelect, appointments }: MiniCalendarProps) {
-  const [viewMonth, setViewMonth] = useState(startOfMonth(currentDate))
-
-  useEffect(() => {
-    setViewMonth(startOfMonth(currentDate))
-  }, [currentDate])
+  const viewMonth = startOfMonth(currentDate)
 
   const days = eachDayOfInterval({
     start: startOfWeek(viewMonth),
@@ -69,14 +65,14 @@ export function MiniCalendar({ currentDate, onSelect, appointments }: MiniCalend
       <div className="flex items-center justify-between mb-3">
         <button
           className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
-          onClick={() => setViewMonth(subMonths(viewMonth, 1))}
+          onClick={() => onSelect(startOfMonth(subMonths(currentDate, 1)))}
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
         <span className="text-sm font-medium">{format(viewMonth, "MMMM yyyy", { locale: ptBR })}</span>
         <button
           className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
-          onClick={() => setViewMonth(addMonths(viewMonth, 1))}
+          onClick={() => onSelect(startOfMonth(addMonths(currentDate, 1)))}
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -105,7 +101,7 @@ export function MiniCalendar({ currentDate, onSelect, appointments }: MiniCalend
                       ? "text-foreground hover:bg-accent"
                       : "text-muted-foreground/30",
               )}
-              onClick={() => { onSelect(day); setViewMonth(startOfMonth(day)) }}
+              onClick={() => { onSelect(day) }}
             >
               {format(day, "d")}
               {dot && (

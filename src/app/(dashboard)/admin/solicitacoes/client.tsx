@@ -71,8 +71,15 @@ export function SolicitacoesClient() {
   }
 
   useEffect(() => {
-    fetch()
-  }, [fetch])
+    let cancelled = false
+    ;(async () => {
+      const res = await getPendingProcedureRequests()
+      if (cancelled) return
+      if ("data" in res) setRequests(res.data as PendingRequest[])
+      setLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   const handleApprove = async (req: PendingRequest) => {
     setActionId(req.id)

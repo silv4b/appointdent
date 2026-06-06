@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/table"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { deleteAnamnesisTemplate, getMyAnamnesisTemplates } from "@/lib/actions/anamnesis-templates"
-import { createClient } from "@/lib/supabase/client"
+
+import { getUserSessionData } from "@/lib/actions/session"
 import { Loader2, Plus, Trash2, FileText } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
@@ -36,18 +37,14 @@ export function MinhasAnamnesesClient() {
   const [pageSize, setPageSize] = useState(10)
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-      supabase.from("profiles").select("role").eq("id", user.id).single().then(({ data: profile }) => {
-        if (profile?.role !== "dentist") {
-          router.push("/")
-          return
-        }
-        getMyAnamnesisTemplates().then((res) => {
-if ("data" in res) setTemplates(res.data as unknown as Template[])
-          setLoading(false)
-        })
+    getUserSessionData().then((result) => {
+      if (!("data" in result) || result.data.role !== "dentist") {
+        router.push("/")
+        return
+      }
+      getMyAnamnesisTemplates().then((res) => {
+        if ("data" in res) setTemplates(res.data as unknown as Template[])
+        setLoading(false)
       })
     })
   }, [router])
@@ -116,7 +113,7 @@ if ("data" in res) setTemplates(res.data as unknown as Template[])
                 <TableRow key={t.id}>
                   <TableCell className="font-medium">{t.name}</TableCell>
                   <TableCell className="text-muted-foreground text-xs max-w-sm truncate">
-                    {Array.from(t.fields as any[]).reverse().map((f: any) => (
+                    {Array.from(t.fields).reverse().map((f: { label: string; description?: string; defaultContent?: string }) => (
                       <span key={f.label} className="block truncate">
                         <span className="font-medium text-foreground">{f.label}</span>
                         {f.description ? <span className="text-muted-foreground/60"> — {f.description}</span> : null}

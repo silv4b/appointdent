@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef, useEffect, type ReactNode } from "react"
+import { useState, useCallback, useRef, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 
 interface EventTooltipProps {
@@ -12,24 +12,13 @@ export function EventTooltip({ content, children }: EventTooltipProps) {
   const [open, setOpen] = useState(false)
   const [visible, setVisible] = useState(false)
   const [pos, setPos] = useState({ x: 0, y: 0 })
-  const [mounted, setMounted] = useState(false)
   const triggerRef = useRef<HTMLDivElement>(null)
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => { setMounted(true) }, [])
-
-  useEffect(() => {
-    if (open) {
-      if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
-      setVisible(true)
-    } else {
-      const timer = setTimeout(() => setVisible(false), 120)
-      leaveTimerRef.current = timer
-    }
-  }, [open])
-
   const handleMouseEnter = useCallback((e: React.MouseEvent) => {
+    if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
     setOpen(true)
+    setVisible(true)
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     let x = rect.left + rect.width / 2
     let y = rect.bottom + 6
@@ -42,6 +31,9 @@ export function EventTooltip({ content, children }: EventTooltipProps) {
 
   const handleMouseLeave = useCallback(() => {
     setOpen(false)
+    if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
+    const timer = setTimeout(() => setVisible(false), 120)
+    leaveTimerRef.current = timer
   }, [])
 
   return (
@@ -52,7 +44,7 @@ export function EventTooltip({ content, children }: EventTooltipProps) {
       className="w-full"
     >
       {children}
-      {visible && mounted && createPortal(
+      {visible && createPortal(
         <div
           className="fixed z-[9999] min-w-52 max-w-64 rounded-lg border bg-popover p-3 text-popover-foreground pointer-events-none transition-opacity duration-[120ms]"
           style={{
