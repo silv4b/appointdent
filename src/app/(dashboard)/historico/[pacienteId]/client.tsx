@@ -18,17 +18,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { createClient } from "@/lib/supabase/client"
+import { getPatientHistoryData } from "@/lib/actions/anamnese"
 import { Database } from "@/types/database"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { ArrowLeft, Eye, FileText, Clock, Loader2 } from "lucide-react"
+import { ArrowLeft, Eye, FileText, Clock } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import { NULL_UUID } from "@/lib/utils/constants"
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 
-type Patient = Database["public"]["Tables"]["patients"]["Row"]
+type Patient = { id: string; name: string; cpf: string | null; email: string | null; phone: string | null; birth_date: string | null; active: boolean | null }
 type Appointment = Database["public"]["Tables"]["appointments"]["Row"] & {
   dentists: { name: string } | null
   procedures: { name: string | null; color: string | null } | null
@@ -49,9 +48,6 @@ export function PacienteDetailClient({ pacienteId }: DetailClientProps) {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [anamneses, setAnamneses] = useState<AnamneseWithAppt[]>([])
   const [loading, setLoading] = useState(true)
-  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
-  const [currentDentistId, setCurrentDentistId] = useState<string | null>(null)
-  const [receptionistDentistIds, setReceptionistDentistIds] = useState<string[]>([])
   const [viewSession, setViewSession] = useState<AnamneseWithAppt | null>(null)
 
   const statusColorMap: Record<string, string> = {
@@ -70,76 +66,25 @@ const [apptPageSize, setApptPageSize] = useState(10)
   const [anamPageSize, setAnamPageSize] = useState(10)
   const paginatedAnamneses = anamneses.slice((anamPage - 1) * anamPageSize, anamPage * anamPageSize)
 
-  const fetch = useCallback(async () => {
-    const supabase = createClient()
-
-    const { data: userData } = await supabase.auth.getUser()
-    const user = userData?.user
-    if (!user) return
-
-    let role: string | null = null
-    let dentId: string | null = null
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
-    if (profile) {
-      role = profile.role
-      if (profile.role === "dentist") {
-        const { data: dent } = await supabase.from("dentists").select("id").eq("profile_id", user.id).single()
-        if (dent) dentId = dent.id
-      } else if (profile.role === "receptionist") {
-        const { data: recDents } = await supabase.from("receptionist_dentists").select("dentist_id").eq("receptionist_id", user.id)
-        if (recDents) setReceptionistDentistIds(recDents.map((r) => r.dentist_id))
-      }
-    }
-    setCurrentUserRole(role)
-    setCurrentDentistId(dentId)
-
-    const { data: pat } = await supabase.from("patients").select("*").eq("id", pacienteId).single()
-    if (pat) setPatient(pat)
-
-    let apptQuery = supabase
-      .from("appointments")
-      .select("*, dentists(name), procedures(name, color)")
-      .eq("patient_id", pacienteId)
-      .lte("start_time", new Date().toISOString())
-      .order("start_time", { ascending: false })
-
-    if (role === "dentist" && dentId) {
-      apptQuery = apptQuery.eq("dentist_id", dentId)
-    } else if (role === "receptionist") {
-      apptQuery = receptionistDentistIds.length > 0
-        ? apptQuery.in("dentist_id", receptionistDentistIds)
-        : apptQuery.eq("dentist_id", NULL_UUID)
-    }
-
-    const { data: appts } = await apptQuery
-    if (appts) setAppointments(appts)
-
-    let anamQuery = supabase
-      .from("anamnese_sessions")
-      .select("*, dentists(name), appointment:appointments!anamnese_sessions_appointment_id_fkey(start_time, dentists(name), procedures(name))")
-      .eq("patient_id", pacienteId)
-      .order("created_at", { ascending: false })
-
-    if (role === "dentist" && dentId) {
-      anamQuery = anamQuery.eq("dentist_id", dentId)
-    } else if (role === "receptionist") {
-      anamQuery = receptionistDentistIds.length > 0
-        ? anamQuery.in("dentist_id", receptionistDentistIds)
-        : anamQuery.eq("dentist_id", NULL_UUID)
-    }
-
-    const { data: anams } = await anamQuery
-    if (anams) setAnamneses(anams as AnamneseWithAppt[])
-
-    setLoading(false)
-  }, [pacienteId, receptionistDentistIds])
-
   useEffect(() => {
-    fetch()
-  }, [fetch])
+    let cancelled = false
+    ;(async () => {
+      const result = await getPatientHistoryData(pacienteId)
+      if (cancelled) return
+      if ("data" in result) {
+        setPatient(result.data.patient)
+        setAppointments(result.data.appointments as Appointment[])
+        setAnamneses(result.data.anamneses as AnamneseWithAppt[])
+      }
+      setLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [pacienteId])
 
-  useEffect(() => { setApptPage(1) }, [appointments.length])
-  useEffect(() => { setAnamPage(1) }, [anamneses.length])
+  useEffect(() => { // eslint-disable-next-line react-hooks/set-state-in-effect
+    setApptPage(1) }, [appointments.length])
+  useEffect(() => { // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAnamPage(1) }, [anamneses.length])
 
   if (loading) {
     return (
@@ -351,17 +296,20 @@ const [apptPageSize, setApptPageSize] = useState(10)
 
               <div className="space-y-3">
                 {Array.isArray(viewSession.fields) && viewSession.fields.length > 0 ? (
-                  viewSession.fields.slice().reverse().map((f: any, fi: number) => (
-                    <div key={fi} className="rounded-lg border bg-card p-4">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
-                        {f.label}
-                      </p>
-                      <div
-                        className="prose prose-sm dark:prose-invert max-w-none text-sm"
-                        dangerouslySetInnerHTML={{ __html: f.content || "—" }}
-                      />
-                    </div>
-                  ))
+                  viewSession.fields.slice().reverse().map((f: unknown, fi: number) => {
+                    const field = f as { label: string; content?: string }
+                    return (
+                      <div key={fi} className="rounded-lg border bg-card p-4">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+                          {field.label}
+                        </p>
+                        <div
+                          className="prose prose-sm dark:prose-invert max-w-none text-sm"
+                          dangerouslySetInnerHTML={{ __html: field.content || "—" }}
+                        />
+                      </div>
+                    )
+                  })
                 ) : viewSession.notes ? (
                   <div className="rounded-lg border bg-card p-4">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">

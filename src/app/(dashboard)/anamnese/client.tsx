@@ -17,9 +17,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { DataTablePagination } from "@/components/data-table-pagination"
-import { createClient } from "@/lib/supabase/client"
+import { getAnamnesePatientsList } from "@/lib/actions/queries"
 import { Database } from "@/types/database"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, Search, UserRound, FileText, X } from "lucide-react"
 import Link from "next/link"
 
@@ -30,105 +30,38 @@ export function AnamneseSearchClient() {
   const [query, setQuery] = useState("")
   const [dentistId, setDentistId] = useState("all")
   const [patients, setPatients] = useState<Patient[]>([])
-  const [dentists, setDentists] = useState<Dentist[]>([])
+  const [dentists] = useState<Dentist[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [total, setTotal] = useState(0)
   const [sortColumn, setSortColumn] = useState<"name" | "phone" | "birth_date">("name")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc")
-  const [userRole, setUserRole] = useState<string | null>(null)
-  const [receptionistDentistIds, setReceptionistDentistIds] = useState<string[]>([])
+  const [userRole] = useState<string | null>(null)
+  const [receptionistDentistIds] = useState<string[]>([])
   const searchRef = useRef<HTMLInputElement>(null)
 
-  const fetch = useCallback(
-    async (p?: number, ps?: number, q?: string, dId?: string) => {
-      const pageNum = p ?? page
-      const pageSizeNum = ps ?? pageSize
-      const searchTerm = q ?? query
-      const dentistFilter = dId ?? dentistId
-
-      const supabase = createClient()
-
-      let patientIds: string[] | null = null
-      if (dentistFilter !== "all") {
-        const { data: appts } = await supabase
-          .from("appointments")
-          .select("patient_id")
-          .eq("dentist_id", dentistFilter)
-        patientIds = [...new Set((appts ?? []).map((a) => a.patient_id))]
-      } else if (userRole === "receptionist" && receptionistDentistIds.length > 0) {
-        const { data: appts } = await supabase
-          .from("appointments")
-          .select("patient_id")
-          .in("dentist_id", receptionistDentistIds)
-        patientIds = [...new Set((appts ?? []).map((a) => a.patient_id))]
-      } else if (userRole === "receptionist") {
-        patientIds = []
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const result = await getAnamnesePatientsList({ page, pageSize, search: query, dentistFilter: dentistId === "all" ? undefined : dentistId })
+      if (cancelled) return
+      if ("data" in result) {
+        setPatients(result.data.data as Patient[])
+        setTotal(result.data.total)
+      } else {
+        setPatients([])
+        setTotal(0)
       }
-
-      let queryBuilder = supabase
-        .from("patients")
-        .select("*", { count: "exact" })
-        .order("name")
-
-      if (patientIds !== null) {
-        if (patientIds.length === 0) {
-          setPatients([])
-          setTotal(0)
-          setLoading(false)
-          return
-        }
-        queryBuilder = queryBuilder.in("id", patientIds)
-      }
-
-      if (searchTerm.trim()) {
-        queryBuilder = queryBuilder.ilike("name", `%${searchTerm.trim()}%`)
-      }
-
-      const { data, count } = await queryBuilder.range(
-        (pageNum - 1) * pageSizeNum,
-        pageNum * pageSizeNum - 1,
-      )
-
-      setPatients(data ?? [])
-      if (count !== null) setTotal(count)
       setLoading(false)
-    },
-    [page, pageSize, query, dentistId, userRole, receptionistDentistIds],
-  )
-
-  useEffect(() => {
-    const supabase = createClient()
-    supabase
-      .from("dentists")
-      .select("*")
-      .order("name")
-      .then((res) => setDentists(res.data ?? []))
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-      supabase.from("profiles").select("role").eq("id", user.id).single().then(({ data: profile }) => {
-        if (!profile) return
-        setUserRole(profile.role)
-        if (profile.role === "receptionist") {
-          supabase.from("receptionist_dentists").select("dentist_id").eq("receptionist_id", user.id).then(({ data }) => {
-            setReceptionistDentistIds(data?.map((r) => r.dentist_id) ?? [])
-          })
-        }
-      })
-    })
-  }, [])
-
-  useEffect(() => {
-    setLoading(true)
-    fetch()
-  }, [fetch])
+    })()
+    return () => { cancelled = true }
+  }, [page, pageSize, query, dentistId])
 
   const handleSearchChange = (value: string) => {
     setQuery(value)
     setPage(1)
     setLoading(true)
-    fetch(1, pageSize, value, dentistId)
   }
 
   const handleDentistChange = (value: string | null) => {
@@ -136,7 +69,6 @@ export function AnamneseSearchClient() {
     setDentistId(v)
     setPage(1)
     setLoading(true)
-    fetch(1, pageSize, query, v)
   }
 
   const toggleSort = (col: typeof sortColumn) => {
@@ -305,13 +237,11 @@ export function AnamneseSearchClient() {
           onPageChange={(p) => {
             setPage(p)
             setLoading(true)
-            fetch(p, pageSize, query, dentistId)
           }}
           onPageSizeChange={(s) => {
             setPageSize(s)
             setPage(1)
             setLoading(true)
-            fetch(1, s, query, dentistId)
           }}
         />
       </div>

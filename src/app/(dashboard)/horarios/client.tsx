@@ -26,18 +26,17 @@ import {
   updateAvailabilitySlot,
 } from "@/lib/actions/availability-slots"
 import { updateClinicHours } from "@/lib/actions/clinic-hours"
-import { createClient } from "@/lib/supabase/client"
+import { getHorariosData, getClinicHours } from "@/lib/actions/queries"
 import { Database } from "@/types/database"
 import { Building2, ChevronDown, Clock, Pencil, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
-import { NULL_UUID } from "@/lib/utils/constants"
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 
 type Slot = Database["public"]["Tables"]["availability_slots"]["Row"] & {
   dentists: { name: string } | null
 }
 
-type Dentist = Database["public"]["Tables"]["dentists"]["Row"]
+type Dentist = { id: string; name: string; specialty: string | null; cro: string | null; email: string | null; phone: string | null; active: boolean; created_at: string }
 
 type ClinicHour = Database["public"]["Tables"]["clinic_hours"]["Row"]
 
@@ -65,11 +64,6 @@ function SlotDialog({
   const [dayOfWeek, setDayOfWeek] = useState(slot?.day_of_week?.toString() ?? "1")
   const [slotType, setSlotType] = useState(slot?.slot_type ?? "available")
   const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    setDayOfWeek(slot?.day_of_week?.toString() ?? "1")
-    setSlotType(slot?.slot_type ?? "available")
-  }, [slot])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -170,21 +164,16 @@ function ClinicHoursSection() {
   const [hours, setHours] = useState<ClinicHour[]>([])
   const [loading, setLoading] = useState(true)
 
-  const fetch = useCallback(async () => {
-    const supabase = createClient()
-    const { data } = await supabase
-      .from("clinic_hours")
-      .select("*")
-      .order("day_of_week")
-    if (data) {
-      setHours(data)
-    }
-    setLoading(false)
-  }, [])
-
   useEffect(() => {
-    fetch()
-  }, [fetch])
+    let cancelled = false
+    ;(async () => {
+      const result = await getClinicHours()
+      if (cancelled) return
+      if ("data" in result) setHours(result.data as ClinicHour[])
+      setLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   const handleToggleOpen = async (day: ClinicHour) => {
     const form = new FormData()
@@ -197,7 +186,7 @@ function ClinicHoursSection() {
       toast.error(result.error)
     } else {
       toast.success(day.is_open ? "Dia fechado" : "Dia aberto")
-      fetch()
+      ;(async () => { const r = await getClinicHours(); if ("data" in r) setHours(r.data as ClinicHour[]) })()
     }
   }
 
@@ -212,7 +201,7 @@ function ClinicHoursSection() {
       toast.error(result.error)
     } else {
       toast.success(`${DAY_NAMES_FULL[day.day_of_week]} atualizado`)
-      fetch()
+      ;(async () => { const r = await getClinicHours(); if ("data" in r) setHours(r.data as ClinicHour[]) })()
     }
   }
 
@@ -319,57 +308,23 @@ export function HorariosClient() {
   const [edit, setEdit] = useState<Slot | null>(null)
   const [open, setOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [userRole, setUserRole] = useState<string | null>(null)
-  const [receptionistDentistIds, setReceptionistDentistIds] = useState<string[]>([])
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [selectedDentistId, setSelectedDentistId] = useState<string | undefined>(undefined)
   const [loading, setLoading] = useState(true)
 
-  const fetch = useCallback(async () => {
-    const supabase = createClient()
-
-    let slotsQuery = supabase
-      .from("availability_slots")
-      .select("*, dentists(name)")
-      .order("dentist_id")
-      .order("day_of_week")
-      .order("start_time")
-
-    if (userRole === "receptionist") {
-      if (receptionistDentistIds.length > 0) {
-        slotsQuery = slotsQuery.in("dentist_id", receptionistDentistIds)
-      } else {
-        slotsQuery = slotsQuery.eq("dentist_id", NULL_UUID)
-      }
-    }
-
-    const [slotsResult, dentistsData] = await Promise.all([
-      slotsQuery,
-      supabase.from("dentists").select("*").order("name").then((r) => r.data ?? []),
-    ])
-    if (slotsResult.data) setSlots(slotsResult.data as Slot[])
-    setDentists(userRole === "receptionist" && receptionistDentistIds.length > 0
-      ? dentistsData.filter((d) => receptionistDentistIds.includes(d.id))
-      : dentistsData)
-    setLoading(false)
-  }, [userRole, receptionistDentistIds])
-
   useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-      supabase.from("profiles").select("role").eq("id", user.id).single().then(({ data: profile }) => {
-        if (!profile) return
-        setUserRole(profile.role)
-        if (profile.role === "receptionist") {
-          supabase.from("receptionist_dentists").select("dentist_id").eq("receptionist_id", user.id).then(({ data }) => {
-            setReceptionistDentistIds(data?.map((r) => r.dentist_id) ?? [])
-          })
-        }
-      })
-    })
-    fetch()
-  }, [fetch])
+    let cancelled = false
+    ;(async () => {
+      const result = await getHorariosData()
+      if (cancelled) return
+      if ("data" in result) {
+        setSlots(result.data.slots as Slot[])
+        setDentists(result.data.dentists as Dentist[])
+      }
+      setLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   const handleDelete = async (id: string) => {
     const form = new FormData()
@@ -377,7 +332,7 @@ export function HorariosClient() {
     const result = await deleteAvailabilitySlot(form)
     if (result?.error) toast.error(result.error)
     else toast.success("Horário excluído")
-    fetch()
+    ;(async () => { const r = await getHorariosData(); if ("data" in r) { setSlots(r.data.slots as Slot[]); setDentists(r.data.dentists as Dentist[]) } })()
   }
 
   const handleSave = async (formData: FormData) => {
@@ -387,7 +342,7 @@ export function HorariosClient() {
     if (!result?.error) {
       toast.success(edit ? "Horário atualizado" : "Horário cadastrado")
       setOpen(false)
-      fetch()
+      ;(async () => { const r = await getHorariosData(); if ("data" in r) { setSlots(r.data.slots as Slot[]); setDentists(r.data.dentists as Dentist[]) } })()
     } else {
       toast.error(result.error)
     }
@@ -543,10 +498,11 @@ export function HorariosClient() {
       )}
 
       <SlotDialog
+        key={edit?.id ?? "new"}
         open={open}
         onOpenChange={(o) => {
           setOpen(o)
-          if (!o) { setEdit(null); setSelectedDentistId(undefined); fetch() }
+          if (!o) { setEdit(null); setSelectedDentistId(undefined); ;(async () => { const r = await getHorariosData(); if ("data" in r) { setSlots(r.data.slots as Slot[]); setDentists(r.data.dentists as Dentist[]) } })() }
         }}
         slot={edit}
         dentistId={selectedDentistId}

@@ -20,15 +20,15 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { DataTablePagination } from "@/components/data-table-pagination"
-import { createClient } from "@/lib/supabase/client"
+import { getUserSessionData } from "@/lib/actions/session"
+import { getHistoricoPatientsList, getDentistsSimpleList } from "@/lib/actions/queries"
 import { Database } from "@/types/database"
-import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { ExternalLink, Search, X } from "lucide-react"
 import Link from "next/link"
-import { NULL_UUID } from "@/lib/utils/constants"
-import { useCallback, useEffect, useRef, useState } from "react"
+
+import { useEffect, useRef, useState } from "react"
 
 type Patient = Database["public"]["Tables"]["patients"]["Row"]
 type Dentist = { id: string; name: string }
@@ -45,83 +45,42 @@ export function HistoricoClient() {
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
-  const [currentDentistId, setCurrentDentistId] = useState<string | null>(null)
   const [receptionistDentistIds, setReceptionistDentistIds] = useState<string[]>([])
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-      supabase.from("profiles").select("role").eq("id", user.id).single().then(({ data: profile }) => {
-        if (!profile) return
-        setCurrentUserRole(profile.role)
-        if (profile.role === "dentist") {
-          supabase.from("dentists").select("id").eq("profile_id", user.id).single().then(({ data: dent }) => {
-            if (dent) setCurrentDentistId(dent.id)
-          })
-        } else if (profile.role === "receptionist") {
-          supabase.from("receptionist_dentists").select("dentist_id").eq("receptionist_id", user.id).then(({ data }) => {
-            setReceptionistDentistIds(data?.map((r) => r.dentist_id) ?? [])
-          })
+    getUserSessionData().then((result) => {
+      if ("data" in result) {
+        setCurrentUserRole(result.data.role)
+        if (result.data.role === "receptionist") {
+          setReceptionistDentistIds(result.data.receptionistDentistIds)
         }
-      })
+      }
     })
-    supabase.from("dentists").select("id, name").order("name").then(({ data }) => {
-      if (data) setDentists(data as Dentist[])
+    getDentistsSimpleList().then((r) => {
+      if ("data" in r) setDentists(r.data as Dentist[])
     })
   }, [])
 
-  const fetchPatients = useCallback(async (p?: number, ps?: number, s?: string, d?: string, sd?: string, ed?: string) => {
-    const pageNum = p ?? page
-    const pageSizeNum = ps ?? pageSize
-    const searchTerm = s ?? search
-    const dentistFilter = d ?? filterDentist
-    const start = sd ?? startDate
-    const end = ed ?? endDate
-
-    const supabase = createClient()
-
-    const effectiveDentist = currentUserRole === "dentist" ? currentDentistId : dentistFilter !== "all" ? dentistFilter : null
-    const effectiveDentistIds = currentUserRole === "receptionist"
-      ? (dentistFilter !== "all" && receptionistDentistIds.includes(dentistFilter)
-        ? [dentistFilter]
-        : receptionistDentistIds)
-      : null
-
-    let patientIds: string[] | null = null
-
-    if (effectiveDentist || effectiveDentistIds || start || end) {
-      let idQuery = supabase.from("appointments").select("patient_id")
-      if (effectiveDentist) idQuery = idQuery.eq("dentist_id", effectiveDentist)
-      if (effectiveDentistIds && effectiveDentistIds.length > 0) idQuery = idQuery.in("dentist_id", effectiveDentistIds)
-      else if (effectiveDentistIds) idQuery = idQuery.eq("dentist_id", NULL_UUID)
-      if (start) idQuery = idQuery.gte("start_time", start)
-      if (end) idQuery = idQuery.lte("start_time", end)
-      const { data } = await idQuery
-      patientIds = [...new Set(data?.map((r) => r.patient_id) ?? [])]
-    }
-
-    let query = supabase.from("patients").select("*", { count: "exact" }).order("name")
-
-    if (patientIds !== null) {
-      query = query.in("id", patientIds.length > 0 ? patientIds : [NULL_UUID])
-    }
-
-    if (searchTerm) {
-      query = query.or(`name.ilike.%${searchTerm}%,cpf.ilike.%${searchTerm}%`)
-    }
-
-    const { data, count } = await query.range((pageNum - 1) * pageSizeNum, pageNum * pageSizeNum - 1)
-
-    if (data) setPatients(data)
-    if (count !== null) setTotal(count)
-    setLoading(false)
-  }, [page, pageSize, search, filterDentist, startDate, endDate, currentUserRole, currentDentistId, receptionistDentistIds])
-
   useEffect(() => {
-    if (currentUserRole !== null) fetchPatients()
-  }, [fetchPatients, currentUserRole])
+    if (currentUserRole === null) return
+    let cancelled = false
+    ;(async () => {
+      const result = await getHistoricoPatientsList({
+        page,
+        pageSize,
+        search: search || undefined,
+        dentistFilter: filterDentist === "all" ? undefined : filterDentist,
+      })
+      if (cancelled) return
+      if ("data" in result) {
+        setPatients(result.data.data as Patient[])
+        setTotal(result.data.total)
+      }
+      setLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [page, pageSize, search, filterDentist, currentUserRole])
 
   return (
     <div>
@@ -139,14 +98,14 @@ export function HistoricoClient() {
             <Input
               ref={searchRef}
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); setLoading(true); fetchPatients(1, pageSize, e.target.value, filterDentist, startDate, endDate) }}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); setLoading(true) }}
               placeholder="Buscar por nome ou CPF..."
               className="h-9 pl-9 pr-8"
             />
             {search && (
               <button
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                onClick={() => { setSearch(""); setPage(1); setLoading(true); fetchPatients(1, pageSize, "", filterDentist, startDate, endDate); searchRef.current?.focus() }}
+                onClick={() => { setSearch(""); setPage(1); setLoading(true); searchRef.current?.focus() }}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -158,7 +117,7 @@ export function HistoricoClient() {
               <Label className="text-xs text-muted-foreground">Dentista</Label>
               <Select
                 value={filterDentist}
-                onValueChange={(v) => { if (v) { setFilterDentist(v); setPage(1); setLoading(true); fetchPatients(1, pageSize, search, v, startDate, endDate) } }}
+                onValueChange={(v) => { if (v) { setFilterDentist(v); setPage(1); setLoading(true) } }}
               >
                 <SelectTrigger className="h-9 w-44">
                   <SelectValue placeholder="Todos os dentistas" />
@@ -181,7 +140,7 @@ export function HistoricoClient() {
             <Input
               type="date"
               value={startDate}
-              onChange={(e) => { setStartDate(e.target.value); setPage(1); setLoading(true); fetchPatients(1, pageSize, search, filterDentist, e.target.value, endDate) }}
+              onChange={(e) => { setStartDate(e.target.value); setPage(1); setLoading(true) }}
               className="h-9 w-40"
             />
           </div>
@@ -191,7 +150,7 @@ export function HistoricoClient() {
             <Input
               type="date"
               value={endDate}
-              onChange={(e) => { setEndDate(e.target.value); setPage(1); setLoading(true); fetchPatients(1, pageSize, search, filterDentist, startDate, e.target.value) }}
+              onChange={(e) => { setEndDate(e.target.value); setPage(1); setLoading(true) }}
               className="h-9 w-40"
             />
           </div>
@@ -255,8 +214,8 @@ export function HistoricoClient() {
           page={page}
           pageSize={pageSize}
           total={total}
-          onPageChange={(p) => { setPage(p); fetchPatients(p) }}
-          onPageSizeChange={(s) => { setPageSize(s); setPage(1); fetchPatients(1, s) }}
+          onPageChange={(p) => { setPage(p) }}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
         />
       </div>
     </div>

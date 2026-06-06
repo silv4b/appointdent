@@ -24,7 +24,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select"
 import {
   Table,
@@ -35,17 +34,16 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { DataTablePagination } from "@/components/data-table-pagination"
-import { deleteAnamneseSession, getAnamneseForExport, saveAnamneseSession, updateAnamneseSession } from "@/lib/actions/anamnese"
+import { deleteAnamneseSession, getAnamneseForExport, getPatientAnamneseData, saveAnamneseSession, updateAnamneseSession } from "@/lib/actions/anamnese"
 import { getMyAnamnesisTemplates } from "@/lib/actions/anamnesis-templates"
 import { generateAnamnesePdf } from "@/lib/utils/export-anamnese-pdf"
-import { NULL_UUID } from "@/lib/utils/constants"
-import { createClient } from "@/lib/supabase/client"
+import { getUserSessionData } from "@/lib/actions/session"
 import { cn } from "@/lib/utils"
 import { Database } from "@/types/database"
 import { format } from "date-fns"
-import { ChevronDown, ChevronUp, Eye, FileDown, FileText, GripVertical, Loader2, Maximize2, Minimize2, MoreVertical, Pen, Pill, Plus, Stethoscope, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronUp, Eye, FileDown, FileText, Loader2, Maximize2, Minimize2, MoreVertical, Pen, Pill, Plus, Stethoscope, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
 type Appointment = Database["public"]["Tables"]["appointments"]["Row"] & {
@@ -60,6 +58,13 @@ type AnamneseSession = Database["public"]["Tables"]["anamnese_sessions"]["Row"] 
   dentists: { name: string } | null
 }
 
+type AnamneseDataPayload = {
+  patient: { id: string; name: string; phone: string | null; email: string | null; birth_date: string | null } | null
+  appointments: Appointment[]
+  sessions: AnamneseSession[]
+  dentists: { id: string; name: string }[]
+}
+
 interface AnamneseField {
   _id: number
   label: string
@@ -68,13 +73,13 @@ interface AnamneseField {
 
 export function PacienteAnamneseClient({ pacienteId, appointmentId, sessionId }: { pacienteId: string; appointmentId?: string; sessionId?: string }) {
   const router = useRouter()
-  const [patient, setPatient] = useState<{ id: string; name: string; email: string | null; phone: string | null; birth_date: string | null; notes: string | null } | null>(null)
+  const [patient, setPatient] = useState<{ id: string; name: string; phone: string | null; email: string | null; birth_date: string | null } | null>(null)
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [sessions, setSessions] = useState<AnamneseSession[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
-  const [dentists, setDentists] = useState<Database["public"]["Tables"]["dentists"]["Row"][]>([])
+  const [dentists, setDentists] = useState<{ id: string; name: string }[]>([])
   const [selectedDentistId, setSelectedDentistId] = useState("")
   const [receptionistDentistIds, setReceptionistDentistIds] = useState<string[]>([])
 
@@ -172,26 +177,31 @@ export function PacienteAnamneseClient({ pacienteId, appointmentId, sessionId }:
   const [anamPage, setAnamPage] = useState(1)
 const [anamPageSize, setAnamPageSize] = useState(10)
   const anamTotal = filteredSessions.length
-  const anamTotalPages = Math.ceil(anamTotal / anamPageSize)
   const paginatedSessions = filteredSessions.slice((anamPage - 1) * anamPageSize, anamPage * anamPageSize)
 
   const [apptPage, setApptPage] = useState(1)
   const [apptPageSize, setApptPageSize] = useState(10)
   const apptTotal = filteredAppointments.length
-  const apptTotalPages = Math.ceil(apptTotal / apptPageSize)
   const paginatedAppointments = filteredAppointments.slice((apptPage - 1) * apptPageSize, apptPage * apptPageSize)
 
   useEffect(() => {
-    if (anamSearch || anamDateStart || anamDateEnd) setAnamPage(1)
+    if (anamSearch || anamDateStart || anamDateEnd) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAnamPage(1)
+    }
   }, [anamSearch, anamDateStart, anamDateEnd])
 
   useEffect(() => {
-    if (anamDateStart || anamDateEnd) setApptPage(1)
+    if (anamDateStart || anamDateEnd) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setApptPage(1)
+    }
   }, [anamDateStart, anamDateEnd])
 
   useEffect(() => {
     if (appointmentId && appointments.length > 0) {
       const found = appointments.find((a) => a.id === appointmentId)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLinkedAppointment(found ?? null)
     }
   }, [appointmentId, appointments])
@@ -199,67 +209,39 @@ const [anamPageSize, setAnamPageSize] = useState(10)
   useEffect(() => {
     if (sessionId && sessions.length > 0) {
       const found = sessions.find((s) => s.id === sessionId)
-      if (found) setViewSession(found)
+      if (found) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setViewSession(found)
+      }
     }
   }, [sessionId, sessions])
 
   useEffect(() => {
     let cancelled = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
 
       ; (async () => {
-        const supabase = createClient()
-        const { data: { user } } = await supabase.auth.getUser()
-
-        const [profileRes, dentistsRes] = await Promise.all([
-          supabase.from("profiles").select("role").eq("id", user?.id ?? "").single(),
-          supabase.from("dentists").select("*").order("name"),
-        ])
-
         if (cancelled) return
 
-        const role = profileRes.data?.role ?? null
+        const sessionResult = await getUserSessionData()
+        if (!("data" in sessionResult)) return
+
+        const { role, receptionistDentistIds } = sessionResult.data
         setUserRole(role)
-
-        let dentistIds: string[] = []
         if (role === "receptionist") {
-          const { data: receptionistDentists } = await supabase
-            .from("receptionist_dentists")
-            .select("dentist_id")
-            .eq("receptionist_id", user?.id ?? "")
-          dentistIds = (receptionistDentists ?? []).map((rd) => rd.dentist_id)
-          setReceptionistDentistIds(dentistIds)
-        } else {
-          setReceptionistDentistIds([])
+          setReceptionistDentistIds(receptionistDentistIds)
         }
-
-        let apptsQuery = supabase
-          .from("appointments")
-          .select("*, patients(name), dentists(name), procedures(name, color, duration_minutes)")
-          .eq("patient_id", pacienteId)
-        let sessionsQuery = supabase
-          .from("anamnese_sessions")
-          .select("*, appointments(patients(name), dentists(name)), patients(name), dentists(name)")
-          .eq("patient_id", pacienteId)
-
-        if (role === "receptionist") {
-          const ids = dentistIds.length > 0 ? dentistIds : [NULL_UUID]
-          apptsQuery = apptsQuery.in("dentist_id", ids)
-          sessionsQuery = sessionsQuery.in("dentist_id", ids)
-        }
-
-        const [patientRes, apptsRes, sessionsRes] = await Promise.all([
-          supabase.from("patients").select("*").eq("id", pacienteId).single(),
-          apptsQuery.order("start_time", { ascending: false }),
-          sessionsQuery.order("created_at", { ascending: false }),
-        ])
 
         if (cancelled) return
 
-        setPatient(patientRes.data ?? null)
-        setAppointments(apptsRes.data ?? [])
-        setSessions(sessionsRes.data as AnamneseSession[] ?? [])
-        setDentists(dentistsRes.data ?? [])
+        const result = await getPatientAnamneseData(pacienteId) as { data: AnamneseDataPayload } | { error: string }
+        if ("data" in result) {
+          setPatient(result.data.patient)
+          setAppointments(result.data.appointments)
+          setSessions(result.data.sessions as AnamneseSession[])
+          setDentists(result.data.dentists)
+        }
         setLoading(false)
       })()
 
@@ -267,54 +249,13 @@ const [anamPageSize, setAnamPageSize] = useState(10)
   }, [pacienteId])
 
   async function refresh() {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    const [profileRes, dentistsRes] = await Promise.all([
-      supabase.from("profiles").select("role").eq("id", user?.id ?? "").single(),
-      supabase.from("dentists").select("*").order("name"),
-    ])
-
-    const role = profileRes.data?.role ?? null
-    setUserRole(role)
-
-    let dentistIds: string[] = []
-    if (role === "receptionist") {
-      const { data: receptionistDentists } = await supabase
-        .from("receptionist_dentists")
-        .select("dentist_id")
-        .eq("receptionist_id", user?.id ?? "")
-      dentistIds = (receptionistDentists ?? []).map((rd) => rd.dentist_id)
-      setReceptionistDentistIds(dentistIds)
-    } else {
-      setReceptionistDentistIds([])
+    const result = await getPatientAnamneseData(pacienteId) as { data: AnamneseDataPayload } | { error: string }
+    if ("data" in result) {
+      setPatient(result.data.patient)
+      setAppointments(result.data.appointments)
+      setSessions(result.data.sessions as AnamneseSession[])
+      setDentists(result.data.dentists)
     }
-
-    let apptsQuery = supabase
-      .from("appointments")
-      .select("*, patients(name), dentists(name), procedures(name, color, duration_minutes)")
-      .eq("patient_id", pacienteId)
-    let sessionsQuery = supabase
-      .from("anamnese_sessions")
-      .select("*, appointments(patients(name), dentists(name)), patients(name), dentists(name)")
-      .eq("patient_id", pacienteId)
-
-    if (role === "receptionist") {
-      const ids = dentistIds.length > 0 ? dentistIds : [NULL_UUID]
-      apptsQuery = apptsQuery.in("dentist_id", ids)
-      sessionsQuery = sessionsQuery.in("dentist_id", ids)
-    }
-
-    const [patientRes, apptsRes, sessionsRes] = await Promise.all([
-      supabase.from("patients").select("*").eq("id", pacienteId).single(),
-      apptsQuery.order("start_time", { ascending: false }),
-      sessionsQuery.order("created_at", { ascending: false }),
-    ])
-
-    setPatient(patientRes.data ?? null)
-    setAppointments(apptsRes.data ?? [])
-    setSessions(sessionsRes.data as AnamneseSession[] ?? [])
-    setDentists(dentistsRes.data ?? [])
     setLoading(false)
   }
 
@@ -943,7 +884,7 @@ const [anamPageSize, setAnamPageSize] = useState(10)
 
               <div className="space-y-3">
                 {Array.isArray(viewSession.fields) && viewSession.fields.length > 0 ? (
-                  viewSession.fields.slice().reverse().map((f: any, fi: number) => (
+                  (viewSession.fields as { label: string; content?: string }[]).slice().reverse().map((f, fi) => (
                     <div key={fi} className="rounded-lg border bg-card p-4">
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
                         {f.label}
@@ -1005,7 +946,7 @@ const [anamPageSize, setAnamPageSize] = useState(10)
                 >
                   <p className="text-sm font-medium">{t.name}</p>
                   <div className="mt-1 space-y-0.5">
-                    {Array.from(t.fields as any[]).reverse().map((f: any, i: number) => (
+                    {Array.from(t.fields as { label: string; description?: string; defaultContent?: string }[]).reverse().map((f, i) => (
                       <p key={i} className="text-xs text-muted-foreground">
                         <span className="font-medium">{f.label}</span>
                         {f.description ? <span> — {f.description}</span> : null}
