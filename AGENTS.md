@@ -15,9 +15,18 @@ Given the identified project modifications (git status):
 1. Analyze all changes.
 2. List all changes by scope (front, back, infrastructure, architecture, etc.).
 3. Inform the user of the file batches along with commit messages for each batch, following semantic commit conventions.
-    - Each batch must contain a commit message (in Portuguese) followed by the files.
+    - Each batch must contain: **lote number**, **commit message** (Portuguese, semantic format), and **list of files**.
+    - Format example:
+      ```
+      **Lote 1 — `feat: criar tabela de pacientes`**
+      src/lib/actions/pacientes.ts
+      src/app/(dashboard)/pacientes/client.tsx
+      
+      **Lote 2 — `fix: corrigir filtro por data`**
+      src/app/(dashboard)/agenda/client.tsx
+      ```
     - Each batch must depend on the previous batch.
-4. Only AFTER user confirmation should the commitments actually be made, as planned in the previous step.
+4. **NEVER commit without explicit user permission.** The user must first confirm the batch plan.
 5. After the commitments are executed, present a direct report with all the commitments made.
 6. Ask the user if they want to perform a push action or if you can do it for them.
 
