@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "dotenv -e .env.local-dev -- next dev",
+    "dev": "next dev",
+    "dev:local": "dotenv -e .env.local-dev -- next dev",
     "dev:cloud": "dotenv -e .env.development -- next dev",
-    "build": "dotenv -e .env.local-dev -- next build",
+    "build": "next build",
     "start": "next start",
     "build:cloud": "dotenv -e .env.development -- next build",
     "lint": "eslint",

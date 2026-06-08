@@ -17,14 +17,16 @@ Given the identified project modifications (git status):
 3. Inform the user of the file batches along with commit messages for each batch, following semantic commit conventions.
     - Each batch must contain: **lote number**, **commit message** (Portuguese, semantic format), and **list of files**.
     - Format example:
-      ```
+
+      ```text
       **Lote 1 — `feat: criar tabela de pacientes`**
       src/lib/actions/pacientes.ts
       src/app/(dashboard)/pacientes/client.tsx
-      
+
       **Lote 2 — `fix: corrigir filtro por data`**
       src/app/(dashboard)/agenda/client.tsx
       ```
+
     - Each batch must depend on the previous batch.
 4. **NEVER commit without explicit user permission.** The user must first confirm the batch plan.
 5. After the commitments are executed, present a direct report with all the commitments made.

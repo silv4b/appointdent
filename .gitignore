@@ -33,16 +33,19 @@ yarn-error.log*
 # env files
 .env
 .env.local
+.env.local-dev
 .env.development
 .env.production
 .env.*.local
-.env.local-dev
 
 # netlify
 .netlify
 
 # database backups
 .db_backups/
+
+# supabase project config (contains passwords)
+supabase-projects.json
 
 # Features
 .features/
@@ -52,6 +55,8 @@ yarn-error.log*
 next-env.d.ts
 
 # sql
-
 .sql_scripts/
 supabase/snippets/
+
+# solders
+.scripts/
