@@ -538,7 +538,7 @@ function AppointmentDialog({
 
   const effectiveDentistId = userRole === "dentist" && currentDentistId ? currentDentistId : selectedDentistId
   const availableProcIds = useMemo(
-    () => effectiveDentistId ? (dentistProcedureMap[effectiveDentistId] ?? []) : null,
+    () => effectiveDentistId ? (dentistProcedureMap[effectiveDentistId] ?? []) : [],
     [effectiveDentistId, dentistProcedureMap],
   )
 
@@ -1288,10 +1288,10 @@ export function AgendaClient() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os dentistas</SelectItem>
-                {(userRole === "receptionist" && receptionistDentistIds.length > 0
-                  ? dentists.filter((d) => receptionistDentistIds.includes(d.id))
-                  : dentists
-                ).map((d) => (
+              {(userRole === "receptionist"
+                ? dentists
+                : dentists
+              ).map((d) => (
                   <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                 ))}
               </SelectContent>

@@ -175,6 +175,8 @@ export async function searchAppointmentsForReturn(params: {
   try {
     const { supabase } = await requireAuth()
 
+    const dentistFilter = await getUserDentistFilter()
+
     const { patient_id, dentist_id, month } = params
     const startOfMonth = `${month}-01T00:00:00Z`
     const endDate = new Date(new Date(month + "-01").getFullYear(), new Date(month + "-01").getMonth() + 1, 0).getDate()
@@ -189,6 +191,14 @@ export async function searchAppointmentsForReturn(params: {
 
     if (patient_id) query = query.eq("patient_id", patient_id)
     if (dentist_id) query = query.eq("dentist_id", dentist_id)
+
+    if (dentistFilter !== null) {
+      if (dentistFilter.length > 0) {
+        query = query.in("dentist_id", dentistFilter)
+      } else {
+        query = query.eq("dentist_id", NULL_UUID)
+      }
+    }
 
     const { data } = await query
 
@@ -543,9 +553,19 @@ export async function getAgendaData(startDate: string, endDate: string) {
       }
     }
 
+    let dentistsQuery = supabase.from("dentists").select("id, name").order("name")
+
+    if (dentistFilter !== null) {
+      if (dentistFilter.length > 0) {
+        dentistsQuery = dentistsQuery.in("id", dentistFilter)
+      } else {
+        dentistsQuery = dentistsQuery.eq("id", NULL_UUID)
+      }
+    }
+
     const [appointments, dentists, patients, procedures, dentistProcs, approvedReqs] = await Promise.all([
       apptQuery.order("start_time").then((r) => r.data ?? []),
-      supabase.from("dentists").select("id, name").order("name").then((r) => r.data ?? []),
+      dentistsQuery.then((r) => r.data ?? []),
       supabase.from("patients").select("id, name").order("name").then((r) => r.data ?? []),
       supabase.from("procedures").select("id, name, color, duration_minutes").order("name").then((r) => r.data ?? []),
       supabase.from("dentist_procedures").select("dentist_id, procedure_id").eq("active", true).then((r) => r.data ?? []),
