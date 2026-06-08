@@ -30,9 +30,10 @@ import {
 import { DataTablePagination } from "@/components/data-table-pagination"
 import { createUser, deleteUser, getUsers, updateUser } from "@/lib/actions/admin"
 import { getDentistsSimpleList, getReceptionistDentistIds } from "@/lib/actions/queries"
-import { ArrowDown, ArrowUp, ArrowUpDown, Eye, EyeOff, Pencil, Plus, Search, Trash2, X } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpDown, Dices, Eye, EyeOff, Pencil, Plus, Search, Trash2, X } from "lucide-react"
 import { useCallback, useEffect, useRef, useState, startTransition } from "react"
 import { toast } from "sonner"
+import { generatePassword } from "@/lib/utils/password"
 
 type UserRow = {
   id: string
@@ -137,10 +138,15 @@ function CriarUsuarioDialog({
           <div className="flex flex-col gap-2">
             <Label htmlFor="user-password">Senha</Label>
             <div className="relative">
-              <Input id="user-password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Mín. 8 caracteres, 1 maiúscula, 1 número" className="pr-10" />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
+              <Input id="user-password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Mín. 8 caracteres, 1 maiúscula, 1 número" className="pr-20" />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <button type="button" onClick={() => setPassword(generatePassword())} className="text-muted-foreground hover:text-foreground" tabIndex={-1} title="Gerar senha">
+                  <Dices className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-muted-foreground hover:text-foreground" tabIndex={-1}>
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
           </div>
           <div className="flex flex-col gap-2">
@@ -171,22 +177,26 @@ function CriarUsuarioDialog({
               <Input id="user-specialty" value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="Clínico Geral, Ortodontia..." />
             </div>
           )}
-          {role === "receptionist" && dentists.length > 0 && (
+          {role === "receptionist" && (
             <div className="flex flex-col gap-2">
               <Label>Vincular a dentistas</Label>
-              <div className="max-h-40 overflow-y-auto rounded-lg border p-2 space-y-1">
-                {dentists.map((d) => (
-                  <label key={d.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-muted/50">
-                    <input
-                      type="checkbox"
-                      checked={dentistIds.includes(d.id)}
-                      onChange={() => toggleDentist(d.id)}
-                      className="h-4 w-4 rounded border-muted-foreground text-primary focus:ring-primary"
-                    />
-                    {d.name}
-                  </label>
-                ))}
-              </div>
+              {dentists.length > 0 ? (
+                <div className="max-h-40 overflow-y-auto rounded-lg border p-2 space-y-1">
+                  {dentists.map((d) => (
+                    <label key={d.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-muted/50">
+                      <input
+                        type="checkbox"
+                        checked={dentistIds.includes(d.id)}
+                        onChange={() => toggleDentist(d.id)}
+                        className="h-4 w-4 rounded border-muted-foreground text-primary focus:ring-primary"
+                      />
+                      {d.name}
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Nenhum dentista cadastrado.</p>
+              )}
             </div>
           )}
           <DialogFooter>
@@ -311,31 +321,40 @@ function EditarUsuarioDialog({
               <Input id="edit-specialty" value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="Clínico Geral, Ortodontia..." />
             </div>
           )}
-          {role === "receptionist" && dentists.length > 0 && (
+          {role === "receptionist" && (
             <div className="flex flex-col gap-2">
               <Label>Vincular a dentistas</Label>
-              <div className="max-h-40 overflow-y-auto rounded-lg border p-2 space-y-1">
-                {dentists.map((d) => (
-                  <label key={d.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-muted/50">
-                    <input
-                      type="checkbox"
-                      checked={dentistIds.includes(d.id)}
-                      onChange={() => toggleDentist(d.id)}
-                      className="h-4 w-4 rounded border-muted-foreground text-primary focus:ring-primary"
-                    />
-                    {d.name}
-                  </label>
-                ))}
-              </div>
+              {dentists.length > 0 ? (
+                <div className="max-h-40 overflow-y-auto rounded-lg border p-2 space-y-1">
+                  {dentists.map((d) => (
+                    <label key={d.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-muted/50">
+                      <input
+                        type="checkbox"
+                        checked={dentistIds.includes(d.id)}
+                        onChange={() => toggleDentist(d.id)}
+                        className="h-4 w-4 rounded border-muted-foreground text-primary focus:ring-primary"
+                      />
+                      {d.name}
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Nenhum dentista cadastrado.</p>
+              )}
             </div>
           )}
           <div className="flex flex-col gap-2">
             <Label htmlFor="edit-password">Nova Senha (deixe em branco para manter)</Label>
             <div className="relative">
-              <Input id="edit-password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mín. 8 caracteres, 1 maiúscula, 1 número" className="pr-10" />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
+              <Input id="edit-password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mín. 8 caracteres, 1 maiúscula, 1 número" className="pr-20" />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <button type="button" onClick={() => setPassword(generatePassword())} className="text-muted-foreground hover:text-foreground" tabIndex={-1} title="Gerar senha">
+                  <Dices className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-muted-foreground hover:text-foreground" tabIndex={-1}>
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
           </div>
           {password && (

@@ -4,12 +4,13 @@ import { useSupabase } from "@/components/providers/supabase-provider"
 import { getUserSessionData } from "@/lib/actions/session"
 import { updateProfileName, updateProfileEmail, updateProfilePassword } from "@/lib/actions/profile"
 import { useCallback, useEffect, useState } from "react"
-import { Building2, Loader2, User, BadgeInfo, Upload, Eye, EyeOff, Check, X } from "lucide-react"
+import { Building2, Loader2, User, BadgeInfo, Upload, Eye, EyeOff, Check, X, Mail, Dices, ShieldAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DynamicField } from "@/components/dynamic-field"
 import { toast } from "sonner"
 import { getClinicSettings, saveClinicSettings } from "@/lib/actions/clinic-settings"
+import { getEmailConfig, updateEmailConfig } from "@/lib/actions/config"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { CropDialog } from "@/components/crop-dialog"
 import { maskPhone, maskCnpj } from "@/lib/utils/masks"
@@ -70,6 +71,7 @@ function PasswordStrength({ password }: { password: string }) {
 export function PerfilClient() {
   const { user } = useSupabase()
   const [role, setRole] = useState<string | null>(null)
+  const [mustChangePassword, setMustChangePassword] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const [editName, setEditName] = useState("")
@@ -99,9 +101,16 @@ export function PerfilClient() {
   const [confirmRemoveLogo, setConfirmRemoveLogo] = useState(false)
   const [savingClinic, setSavingClinic] = useState(false)
 
+  const [gmailUser, setGmailUser] = useState("")
+  const [gmailAppPassword, setGmailAppPassword] = useState("")
+  const [savingEmailConfig, setSavingEmailConfig] = useState(false)
+
   useEffect(() => {
     getUserSessionData().then((result) => {
-      if ("data" in result) setRole(result.data.role)
+      if ("data" in result) {
+        setRole(result.data.role)
+        setMustChangePassword(result.data.mustChangePassword)
+      }
       setLoading(false)
     })
   }, [user])
@@ -132,6 +141,12 @@ export function PerfilClient() {
         setClinicPhone2(c.phone2 ? maskPhone(c.phone2) : "")
         setClinicCnpj(c.cnpj ? maskCnpj(c.cnpj) : "")
         setClinicLogo(c.logo ?? null)
+      }
+    })
+    getEmailConfig().then((result) => {
+      if (result) {
+        setGmailUser(result.gmailUser)
+        setGmailAppPassword(result.gmailAppPassword ? "••••••••" : "")
       }
     })
   }, [role])
@@ -173,10 +188,32 @@ export function PerfilClient() {
       toast.error(result.error)
     } else {
       toast.success("Senha atualizada com sucesso!")
-      setNewPassword("")
-      setConfirmPassword("")
+      if (mustChangePassword) {
+        setMustChangePassword(false)
+        setNewPassword("")
+        setConfirmPassword("")
+        window.location.href = "/"
+      } else {
+        setNewPassword("")
+        setConfirmPassword("")
+      }
     }
     setSavingPassword(false)
+  }
+
+  const handleSaveEmailConfig = async () => {
+    setSavingEmailConfig(true)
+    const formData = new FormData()
+    formData.set("gmailUser", gmailUser)
+    formData.set("gmailAppPassword", gmailAppPassword === "••••••••" ? "" : gmailAppPassword)
+    const result = await updateEmailConfig(formData)
+    if (result?.error) {
+      toast.error(result.error)
+    } else {
+      toast.success("Configuração de email salva!")
+      setGmailAppPassword("••••••••")
+    }
+    setSavingEmailConfig(false)
   }
 
   const handleSaveClinic = useCallback(async () => {
@@ -207,6 +244,61 @@ export function PerfilClient() {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (mustChangePassword) {
+    return (
+      <div className="mx-auto max-w-lg">
+        <div className="rounded-lg border bg-card">
+          <div className="border-b bg-amber-50 px-6 py-8 text-center dark:bg-amber-950">
+            <ShieldAlert className="mx-auto mb-3 h-12 w-12 text-amber-600" />
+            <h1 className="text-xl font-bold text-amber-800 dark:text-amber-200">Senha Temporária</h1>
+            <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+              Você está usando uma senha temporária. Crie uma nova senha para continuar.
+            </p>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="relative">
+              <Input
+                type={showPassword ? "text" : "password"}
+                placeholder="Nova senha"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+
+            <Input
+              type="password"
+              placeholder="Confirmar nova senha"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+
+            {newPassword && <PasswordStrength password={newPassword} />}
+
+            {confirmPassword && newPassword !== confirmPassword && (
+              <p className="text-xs text-destructive">As senhas não conferem</p>
+            )}
+
+            <Button
+              className="w-full"
+              onClick={handleSavePassword}
+              disabled={savingPassword || !newPassword || !!passwordError || !passwordsMatch}
+            >
+              {savingPassword ? "Salvando..." : "Criar Nova Senha"}
+            </Button>
+          </div>
+        </div>
       </div>
     )
   }
@@ -470,6 +562,57 @@ export function PerfilClient() {
             <div className="flex justify-end">
               <Button onClick={handleSaveClinic} disabled={savingClinic}>
                 {savingClinic ? "Salvando..." : "Salvar Dados da Clínica"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {role === "admin" && (
+        <div className="mt-8 rounded-lg border bg-card">
+          <div className="border-b px-4 py-3 flex items-center gap-2">
+            <Mail className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold">Configuração de E-mail</h2>
+          </div>
+          <div className="p-4 space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Configure um Gmail para envio de e-mails automáticos (boas-vindas, notificações).
+              Use uma{" "}
+              <a
+                href="https://support.google.com/accounts/answer/185833"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline underline-offset-4 hover:text-primary/80"
+              >
+                senha de app
+              </a>{" "}
+              do Google.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium">Gmail</label>
+                <input
+                  type="email"
+                  value={gmailUser}
+                  onChange={(e) => setGmailUser(e.target.value)}
+                  placeholder="seuemail@gmail.com"
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium">Senha de App</label>
+                <input
+                  type="password"
+                  value={gmailAppPassword}
+                  onChange={(e) => setGmailAppPassword(e.target.value)}
+                  placeholder="16 caracteres"
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={handleSaveEmailConfig} disabled={savingEmailConfig}>
+                {savingEmailConfig ? "Salvando..." : "Salvar Configuração de E-mail"}
               </Button>
             </div>
           </div>
