@@ -40,6 +40,7 @@ type UserRow = {
   email: string
   role: string
   dentist_id: string | null
+  specialty: string | null
   created_at: string
   total: number
 }
@@ -224,6 +225,11 @@ function EditarUsuarioDialog({
 
   useEffect(() => {
     if (open && user) {
+      setName(user.name)
+      setEmail(user.email)
+      setRole(user.role)
+      setSpecialty(user.specialty ?? "")
+      setDentistIds([])
       getDentistsSimpleList().then((res) => {
         if ("data" in res && res.data) setDentists(res.data.map((d) => ({ id: d.id, name: d.name })))
       })
