@@ -7,6 +7,7 @@ import { ok, err } from "@/lib/utils/action-response"
 import { translateMessage } from "@/lib/utils/translate-error"
 import { z } from "zod"
 import { sendWelcomeEmail } from "@/lib/email"
+import { getEmailConfig } from "@/lib/actions/config"
 
 export async function getUsers(page = 1, pageSize = 10) {
   try {
@@ -174,17 +175,24 @@ export async function createUser(formData: FormData) {
       }
     }
 
-    if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
-      try {
-        await sendWelcomeEmail({
-          to: parsed.data.email,
-          name: parsed.data.name,
-          role: parsed.data.role,
-          password: parsed.data.password,
-        })
-      } catch (e) {
-        console.error("Failed to send welcome email:", e)
+    try {
+      const emailConfig = await getEmailConfig()
+      if (emailConfig) {
+        try {
+          await sendWelcomeEmail({
+            to: parsed.data.email,
+            name: parsed.data.name,
+            role: parsed.data.role,
+            password: parsed.data.password,
+            ...emailConfig,
+          })
+        } catch (sendErr) {
+          console.error("Failed to send welcome email:", sendErr)
+          return err("Usuário criado, mas o email de boas-vindas não pôde ser enviado. Verifique a configuração de email no perfil.")
+        }
       }
+    } catch (e) {
+      console.error("Failed to get email config:", e)
     }
 
     revalidatePath("/admin/usuarios")

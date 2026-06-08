@@ -9,6 +9,7 @@ export type UserSession = {
   dentistId: string | null
   dentistName: string | null
   receptionistDentistIds: string[]
+  mustChangePassword: boolean
 }
 
 export async function getUserSessionData() {
@@ -17,11 +18,12 @@ export async function getUserSessionData() {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, must_change_password")
       .eq("id", user.id)
       .single()
 
     const role = profile?.role ?? null
+    const mustChangePassword = profile?.must_change_password ?? false
     let dentistId: string | null = null
     let dentistName: string | null = null
     let receptionistDentistIds: string[] = []
@@ -50,6 +52,7 @@ export async function getUserSessionData() {
       dentistId,
       dentistName,
       receptionistDentistIds,
+      mustChangePassword,
     })
   } catch (e) {
     if (e instanceof Error && e.name === "AuthError") return err("Não autenticado")

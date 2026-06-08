@@ -1,24 +1,25 @@
 import nodemailer from "nodemailer"
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-})
-
 export async function sendWelcomeEmail({
   to,
   name,
   role,
   password,
+  gmailUser,
+  gmailAppPassword,
 }: {
   to: string
   name: string
   role: string
   password: string
+  gmailUser: string
+  gmailAppPassword: string
 }) {
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: { user: gmailUser, pass: gmailAppPassword },
+  })
+
   const roleLabels: Record<string, string> = {
     admin: "Administrador",
     dentist: "Dentista",
@@ -26,7 +27,7 @@ export async function sendWelcomeEmail({
   }
 
   await transporter.sendMail({
-    from: `"AppointDent" <${process.env.GMAIL_USER}>`,
+    from: `"AppointDent" <${gmailUser}>`,
     to,
     subject: "Bem-vindo ao AppointDent",
     html: `
@@ -37,10 +38,10 @@ export async function sendWelcomeEmail({
         <p style="color: #374151;">Use as credenciais abaixo para acessar o sistema:</p>
         <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; margin: 16px 0;">
           <p style="margin: 0 0 8px; color: #374151;"><strong>Email:</strong> ${to}</p>
-          <p style="margin: 0; color: #374151;"><strong>Senha:</strong> ${password}</p>
+          <p style="margin: 0; color: #374151;"><strong>Senha (temporária):</strong> ${password}</p>
         </div>
-        <p style="color: #6b7280; font-size: 14px;">
-          Recomendamos alterar sua senha no primeiro acesso.
+        <p style="color: #dc2626; font-size: 14px; font-weight: 600;">
+          ⚠ Esta senha é temporária. Você será redirecionado para criar uma nova senha no primeiro acesso.
         </p>
       </div>
     `,

@@ -542,6 +542,7 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           id: string
+          must_change_password: boolean | null
           name: string
           role: string
           updated_at: string
@@ -550,6 +551,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           id: string
+          must_change_password?: boolean | null
           name: string
           role?: string
           updated_at?: string
@@ -558,6 +560,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           id?: string
+          must_change_password?: boolean | null
           name?: string
           role?: string
           updated_at?: string
@@ -621,6 +624,21 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      app_config: {
+        Row: {
+          key: string
+          value: string
+        }
+        Insert: {
+          key?: string
+          value?: string
+        }
+        Update: {
+          key?: string
+          value?: string
+        }
+        Relationships: []
       }
       clinic_settings: {
         Row: {

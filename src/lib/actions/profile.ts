@@ -44,7 +44,7 @@ export async function updateProfileEmail(email: string) {
 
 export async function updateProfilePassword(password: string) {
   try {
-    const { supabase } = await requireAuth()
+    const { supabase, user } = await requireAuth()
 
     const { error } = await supabase.auth.updateUser({ password })
 
@@ -52,6 +52,11 @@ export async function updateProfilePassword(password: string) {
       if (error.message?.includes("same")) return err("A nova senha deve ser diferente da atual")
       return err("Erro ao atualizar senha")
     }
+
+    await supabase
+      .from("profiles")
+      .update({ must_change_password: false })
+      .eq("id", user.id)
 
     return ok()
   } catch (e) {
