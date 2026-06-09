@@ -114,3 +114,28 @@ When creating a new table or adding an operation to an existing table:
 2. Follow the role-based scope template
 3. Check if there are no old policies conflicting (use `pg_policies`)
 4. Test the migration locally with `npx supabase migration up`
+
+## Test conventions
+
+Every test file **must** have a comment at the top describing **what** it tests and **where** the code under test lives. Be simple and direct — one or two lines.
+
+```text
+// Tests: src/lib/utils/password.ts — generatePassword()
+// Ensures passwords meet length, character class requirements, and randomness.
+```
+
+New tests should prioritize **meaningful scenarios** over coverage:
+
+- Boundary values (empty, max length, off-by-one)
+- Security (tampered payloads, access denied, rate limited)
+- Business rules (overlap rejection, wrong dentist blocked, cancellation rate)
+- Failure modes (Supabase returns error, auth fails, RPC unavailable)
+
+Available commands in `package.json`:
+
+- `npm test` — runs all tests
+- `npm run test:watch` — watch mode
+- `npm run test:coverage` — with coverage report
+- `npm run test:schemas` — only Zod schema tests
+- `npm run test:utils` — only utils, crypto, rate-limit, access-filter, email
+- `npm run test:actions` — only server actions

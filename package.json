@@ -13,6 +13,11 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\"",
     "test": "jest",
     "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:verbose": "jest --verbose",
+    "test:schemas": "jest src/lib/schemas",
+    "test:utils": "jest src/lib/__tests__",
+    "test:actions": "jest src/lib/actions",
     "supabase": "supabase migration up && supabase stop && supabase start",
     "supabase:reset": "supabase db reset"
   },
