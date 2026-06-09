@@ -104,6 +104,12 @@ export function PacienteAnamneseClient({ pacienteId, appointmentId, sessionId }:
   const [linkedAppointment, setLinkedAppointment] = useState<Appointment | null>(null)
   const [finishingAppointment, setFinishingAppointment] = useState(false)
 
+  const STORAGE_KEY = `anamnese_draft_${pacienteId}_${appointmentId ?? "no-appt"}`
+
+  const clearDraft = () => {
+    try { localStorage.removeItem(STORAGE_KEY) } catch {}
+  }
+
   const statusColorMap: Record<string, string> = {
     pending: "bg-purple-100 text-purple-800",
     scheduled: "bg-amber-100 text-amber-800",
@@ -250,6 +256,32 @@ const [anamPageSize, setAnamPageSize] = useState(10)
     return () => { cancelled = true }
   }, [pacienteId])
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) {
+        const draft = JSON.parse(saved)
+        if (draft.formTitle) setFormTitle(draft.formTitle)
+        if (draft.formFields?.length > 0) {
+          setFormFields(draft.formFields)
+          fieldIdCounter.current = draft.fieldIdCounter ?? 1
+        }
+        if (draft.selectedDentistId) setSelectedDentistId(draft.selectedDentistId)
+        if (draft.editingSessionId) setEditingSessionId(draft.editingSessionId)
+      }
+    } catch {}
+  }, [STORAGE_KEY])
+
+  useEffect(() => {
+    const isEmpty = !formTitle && formFields.length === 1 && !formFields[0].label && !formFields[0].content && !selectedDentistId && !editingSessionId
+    if (isEmpty) {
+      clearDraft()
+      return
+    }
+    const draft = { formTitle, formFields, selectedDentistId, editingSessionId, fieldIdCounter: fieldIdCounter.current }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft))
+  }, [formTitle, formFields, selectedDentistId, editingSessionId, STORAGE_KEY])
+
   async function refresh() {
     const result = await getPatientAnamneseData(pacienteId) as { data: AnamneseDataPayload } | { error: string }
     if ("data" in result) {
@@ -337,6 +369,7 @@ const [anamPageSize, setAnamPageSize] = useState(10)
         toast.error(result.error)
       } else {
         toast.success("Sessão atualizada")
+        clearDraft()
         resetForm()
         refresh()
       }
@@ -347,6 +380,7 @@ const [anamPageSize, setAnamPageSize] = useState(10)
         toast.error(result.error)
       } else {
         toast.success("Sessão salva com sucesso")
+        clearDraft()
         resetForm()
         refresh()
       }
@@ -730,6 +764,10 @@ const [anamPageSize, setAnamPageSize] = useState(10)
                 )}
               </div>
               <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => router.push(`/atestados/novo?pacienteId=${pacienteId}${appointmentId ? `&appointmentId=${appointmentId}` : ""}&returnTo=anamnese`)}>
+                  <FileText className="mr-1.5 h-4 w-4" />
+                  Novo Atestado
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => router.push(`/prescricao/nova?pacienteId=${pacienteId}${appointmentId ? `&appointmentId=${appointmentId}` : ""}&returnTo=anamnese`)}>
                   <Pill className="mr-1.5 h-4 w-4" />
                   Nova Receita

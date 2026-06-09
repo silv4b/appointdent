@@ -113,6 +113,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
       items: [
         { href: "/confirmacao", label: "Confirmação", icon: CheckCircle as typeof LayoutDashboard },
         { href: "/historico", label: "Histórico de Agendamentos", icon: Clock as typeof LayoutDashboard },
+        { href: "/atestados", label: "Atestados", icon: FileText as typeof LayoutDashboard },
         { href: "/prescricao", label: "Receituário", icon: FileText as typeof LayoutDashboard },
         ...(isReceptionist && !isAdmin ? [] : [{ href: "/anamnese", label: "Anamnese", icon: BookOpen as typeof LayoutDashboard }]),
         ...(isDentist || isAdmin ? [

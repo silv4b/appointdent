@@ -210,19 +210,13 @@ export function PrescricaoFormClient({
     }))))
     formData.set("general_observations", generalObservations)
 
-    const isReturnToAnamnese = searchParams.get("returnTo") === "anamnese"
-    const returnPacienteId = searchParams.get("pacienteId")
     if (isNew) {
       const result = await savePrescription(formData)
       if (result?.error) {
         toast.error(result.error)
       } else {
         toast.success("Receita cadastrada com sucesso!")
-        if (isReturnToAnamnese && returnPacienteId) {
-          router.push(`/anamnese/${returnPacienteId}${appointmentIdParam ? `?appointmentId=${appointmentIdParam}` : ""}`)
-        } else {
-          router.push("/prescricao")
-        }
+        goBack()
       }
     } else {
       formData.set("id", prescriptionId)
@@ -281,6 +275,20 @@ export function PrescricaoFormClient({
     const blobUrl = doc.output("bloburl")
     window.open(blobUrl, "_blank")
     toast.success("PDF aberto para impressão!")
+  }
+
+  const anamneseReturnUrl = (() => {
+    const isReturn = searchParams.get("returnTo") === "anamnese"
+    const pid = searchParams.get("pacienteId")
+    const apptId = searchParams.get("appointmentId")
+    if (isReturn && pid) {
+      return `/anamnese/${pid}${apptId ? `?appointmentId=${apptId}` : ""}`
+    }
+    return null
+  })()
+
+  const goBack = () => {
+    router.push(anamneseReturnUrl ?? "/prescricao")
   }
 
   const isReceptionist = userRole === "receptionist"
@@ -420,7 +428,7 @@ export function PrescricaoFormClient({
     <>
       <div className="max-w-3xl mx-auto">
       <div className="mb-6 flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/prescricao")} title="Voltar">
+        <Button variant="ghost" size="icon" onClick={goBack} title="Voltar">
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
@@ -571,7 +579,7 @@ export function PrescricaoFormClient({
         title="Descartar alterações?"
         description="As informações preenchidas serão perdidas."
         confirmLabel="Descartar"
-        onConfirm={() => router.push("/prescricao")}
+        onConfirm={goBack}
       />
 
       <ConfirmDialog
