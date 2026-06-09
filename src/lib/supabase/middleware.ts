@@ -44,12 +44,17 @@ export async function updateSession(request: NextRequest) {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, must_change_password")
       .eq("id", user.id)
       .single()
 
     const role = profile?.role ?? "receptionist"
     const path = request.nextUrl.pathname
+    const mustChangePassword = profile?.must_change_password ?? false
+
+    if (mustChangePassword && path !== "/perfil") {
+      return NextResponse.redirect(new URL("/perfil", request.url))
+    }
 
     const adminRoutes = ["/admin"]
     const dentistRoutes = ["/minha-agenda", "/minhas-anamneses", "/meus-procedimentos"]

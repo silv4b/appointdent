@@ -10,6 +10,7 @@ export type UserSession = {
   dentistName: string | null
   receptionistDentistIds: string[]
   mustChangePassword: boolean
+  autoConfirm: boolean
 }
 
 export async function getUserSessionData() {
@@ -28,15 +29,18 @@ export async function getUserSessionData() {
     let dentistName: string | null = null
     let receptionistDentistIds: string[] = []
 
+    let autoConfirm = false
+
     if (role === "dentist") {
       const { data: dent } = await supabase
         .from("dentists")
-        .select("id, name")
+        .select("id, name, auto_confirm")
         .eq("profile_id", user.id)
         .single()
       if (dent) {
         dentistId = dent.id
         dentistName = dent.name
+        autoConfirm = dent.auto_confirm
       }
     } else if (role === "receptionist") {
       const { data: links } = await supabase
@@ -53,6 +57,7 @@ export async function getUserSessionData() {
       dentistName,
       receptionistDentistIds,
       mustChangePassword,
+      autoConfirm,
     })
   } catch (e) {
     if (e instanceof Error && e.name === "AuthError") return err("Não autenticado")

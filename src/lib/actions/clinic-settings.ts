@@ -3,7 +3,11 @@
 import { requireAuth } from "@/lib/supabase/guard"
 import { revalidatePath } from "next/cache"
 import { ok, err } from "@/lib/utils/action-response"
+import { translateMessage } from "@/lib/utils/translate-error"
 import { z } from "zod"
+
+const ALLOWED_LOGO_FORMATS = /^data:image\/(jpeg|jpg|png);base64,/
+const MAX_LOGO_SIZE = 500_000 // 500KB
 
 const clinicSettingsSchema = z.object({
   name: z.string().max(200),
@@ -16,7 +20,12 @@ const clinicSettingsSchema = z.object({
   phone1: z.string().max(20),
   phone2: z.string().max(20),
   cnpj: z.string().max(20),
-  logo: z.string().nullable().optional(),
+  logo: z.string().nullable().optional().refine((val) => {
+    if (!val) return true
+    if (!ALLOWED_LOGO_FORMATS.test(val)) return false
+    if (val.length > MAX_LOGO_SIZE) return false
+    return true
+  }, "Formato inválido. Permitido apenas JPG, JPEG e PNG (máx. 500KB)"),
 })
 
 export async function getClinicSettings() {
@@ -30,7 +39,7 @@ export async function getClinicSettings() {
       .limit(1)
       .maybeSingle()
 
-    if (error) return err(error.message)
+    if (error) return err(translateMessage(error.message))
     return ok(data)
   } catch {
     return err("Erro ao buscar dados da clínica")
@@ -64,12 +73,12 @@ export async function saveClinicSettings(formData: FormData) {
         .from("clinic_settings")
         .update(parsed.data)
         .eq("id", existingId)
-      if (error) return err(error.message)
+      if (error) return err(translateMessage(error.message))
     } else {
       const { error } = await supabase
         .from("clinic_settings")
         .insert(parsed.data)
-      if (error) return err(error.message)
+      if (error) return err(translateMessage(error.message))
     }
 
     revalidatePath("/perfil")

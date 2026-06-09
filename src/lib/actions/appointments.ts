@@ -301,6 +301,16 @@ export async function createAppointment(formData: FormData) {
       }
     }
 
+    let status = "pending"
+    const { data: dentist } = await supabase
+      .from("dentists")
+      .select("auto_confirm")
+      .eq("id", dentist_id)
+      .single()
+    if (dentist?.auto_confirm) {
+      status = "confirmed"
+    }
+
     const { error } = await supabase.from("appointments").insert({
       patient_id,
       dentist_id,
@@ -308,7 +318,7 @@ export async function createAppointment(formData: FormData) {
       start_time: startTime,
       end_time: endTime,
       notes: notes || null,
-      status: "pending",
+      status,
       return_to_id: return_to_id || null,
     })
 

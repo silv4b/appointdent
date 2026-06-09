@@ -81,7 +81,7 @@ export async function deleteUser(formData: FormData) {
       caller_id: user.id,
     })
 
-    if (error) return err(error.message)
+    if (error) return err(translateMessage(error.message))
     revalidatePath("/admin/usuarios")
     return ok()
   } catch {
@@ -121,7 +121,7 @@ export async function updateUser(formData: FormData) {
       novo_email: parsed.data.email,
     })
 
-    if (error) return err(error.message)
+    if (error) return err(translateMessage(error.message))
 
     const dentistIdsRaw = formData.get("dentist_ids") as string | null
     if (parsed.data.role === "receptionist" && dentistIdsRaw) {
@@ -161,7 +161,7 @@ export async function createUser(formData: FormData) {
       especialidade: parsed.data.role === "dentist" ? (parsed.data.specialty ?? "") : null,
     })
 
-    if (error) return err(error.message)
+    if (error) return err(translateMessage(error.message))
 
     const dentistIdsRaw = formData.get("dentist_ids") as string | null
     if (parsed.data.role === "receptionist" && dentistIdsRaw) {
