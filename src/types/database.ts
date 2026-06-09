@@ -362,6 +362,7 @@ export type Database = {
       dentists: {
         Row: {
           active: boolean
+          auto_confirm: boolean
           created_at: string
           cro: string | null
           email: string | null
@@ -374,6 +375,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          auto_confirm?: boolean
           created_at?: string
           cro?: string | null
           email?: string | null
@@ -386,6 +388,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          auto_confirm?: boolean
           created_at?: string
           cro?: string | null
           email?: string | null
@@ -625,6 +628,64 @@ export type Database = {
           },
         ]
       }
+      certificates: {
+        Row: {
+          id: string
+          patient_id: string
+          dentist_id: string
+          appointment_id: string | null
+          title: string
+          content: string
+          general_observations: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          patient_id: string
+          dentist_id: string
+          appointment_id?: string | null
+          title?: string
+          content?: string
+          general_observations?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          patient_id?: string
+          dentist_id?: string
+          appointment_id?: string | null
+          title?: string
+          content?: string
+          general_observations?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "certificates_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certificates_dentist_id_fkey"
+            columns: ["dentist_id"]
+            isOneToOne: false
+            referencedRelation: "dentists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certificates_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_config: {
         Row: {
           key: string
@@ -743,6 +804,15 @@ export type Database = {
       },
       check_login_rate_limit: {
         Args: { ip_address: string }
+        Returns: boolean
+      },
+      check_rate_limit_by_email: {
+        Args: {
+          p_email: string
+          p_action: string
+          p_max_attempts?: number
+          p_window_minutes?: number
+        }
         Returns: boolean
       },
     }
